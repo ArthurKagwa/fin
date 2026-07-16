@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Buckets — FinTrack{% endblock %}
+{% block content %}
+<h1>Buckets</h1>
+{% if buckets %}
+  <ul>
+    {% for b in buckets %}
+      <li>
+        {{ b.name }} — balance {{ b.balance_minor }}
+        {% if b.goal_minor %} · goal {{ b.goal_minor }}{% endif %}
+        <form method="post" action="{% url 'bucket-archive' b.pk %}" style="display:inline">
+          {% csrf_token %}<button type="submit">Archive</button>
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>No buckets yet — create your first below.</p>
+{% endif %}
+<h2>New bucket</h2>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Create</button>
+</form>
+{% endblock %}

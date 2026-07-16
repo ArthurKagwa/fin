@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — FinTrack{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<p>Day {{ days_elapsed }} of the month.</p>
+{% if unallocated_minor > 0 %}
+  <p><strong>{{ unallocated_minor }}</strong> not yet given a job —
+     <a href="{% url 'income-list' %}">allocate it</a>.</p>
+{% endif %}
+{% if buckets %}
+  <ul>
+    {% for b in buckets %}
+      <li>
+        {{ b.bucket.name }} — balance {{ b.balance_minor }}
+        (spent this month {{ b.spent_this_month }}{% if b.planned_minor %} of {{ b.planned_minor }}{% endif %})
+        {% if b.carried_over_minor %} · carried over {{ b.carried_over_minor }}{% endif %}
+        {% if b.goal_minor %} · goal {{ b.goal_minor }}{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+  <p><a href="{% url 'expense-add' %}">+ Add expense</a></p>
+{% else %}
+  <p>Get started: <a href="{% url 'bucket-list' %}">create buckets</a>,
+     then <a href="{% url 'income-list' %}">log money in</a>.</p>
+{% endif %}
+{% endblock %}

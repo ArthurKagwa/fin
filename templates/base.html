@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}FinTrack{% endblock %}</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#1a7f5a">
+</head>
+<body>
+  {% if user.is_authenticated %}
+  <nav>
+    <a href="{% url 'dashboard' %}">Home</a> ·
+    <a href="{% url 'income-list' %}">Money in</a> ·
+    <a href="{% url 'bucket-list' %}">Buckets</a> ·
+    <a href="{% url 'expense-add' %}">+ Expense</a> ·
+    <a href="{% url 'recurring-list' %}">Recurring</a>
+    {% if user.is_staff %} · <a href="/admin/">Admin</a>{% endif %}
+    · <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button type="submit">Log out</button></form>
+  </nav>
+  <hr>
+  {% endif %}
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Allocate — FinTrack{% endblock %}
+{% block content %}
+<h1>Allocate {{ income.amount_minor }} from {{ income.source }}</h1>
+{% if error %}<p style="color:red">{{ error }}</p>{% endif %}
+{% if rows %}
+<form method="post">
+  {% csrf_token %}
+  {% for row in rows %}
+    <p>
+      <label>{{ row.bucket.name }}
+        <input type="number" name="bucket_{{ row.bucket.pk }}" min="0"
+               value="{{ row.current }}" placeholder="0">
+      </label>
+    </p>
+  {% endfor %}
+  <button type="submit">Save allocation</button>
+</form>
+<p>Leave fields empty to keep money unallocated — it stays visible on the dashboard.</p>
+{% else %}
+<p>No buckets to allocate into. <a href="{% url 'bucket-list' %}">Create buckets first.</a></p>
+{% endif %}
+{% endblock %}

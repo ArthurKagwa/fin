@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Recurring — FinTrack{% endblock %}
+{% block content %}
+<h1>Recurring payments</h1>
+{% if payments %}
+  <ul>
+    {% for p in payments %}
+      <li>
+        {{ p.name }} — {{ p.current_amount_minor }} {{ p.frequency }},
+        from {{ p.start_on }}{% if p.end_on %} to {{ p.end_on }}{% endif %}
+        → {{ p.bucket.name }}
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>No recurring payments yet — register rent, subscriptions, loan repayments below.</p>
+{% endif %}
+<h2>New recurring payment</h2>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Create</button>
+</form>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Money in — FinTrack{% endblock %}
+{% block content %}
+<h1>Money in</h1>
+<h2>Log money in</h2>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Save and allocate</button>
+</form>
+{% if incomes %}
+  <h2>Recent</h2>
+  <ul>
+    {% for i in incomes %}
+      <li>
+        {{ i.occurred_on }} — {{ i.amount_minor }} from {{ i.source }}
+        (unallocated {{ i.unallocated_minor }})
+        <a href="{% url 'income-allocate' i.pk %}">Allocate</a>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+{% endblock %}
