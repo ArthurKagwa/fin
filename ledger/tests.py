@@ -7,7 +7,13 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from .models import Bucket, Expense, IncomeEvent
-from .services import set_allocations, unallocated_total_minor
+from .services import (
+    earnings_summary,
+    prefill_deductions,
+    save_paycheque,
+    set_allocations,
+    unallocated_total_minor,
+)
 
 User = get_user_model()
 
@@ -94,7 +100,15 @@ class ViewSmokeTests(TestCase):
         bucket = Bucket.objects.create(user=self.user, name="Rent")
         r = self.client.post(
             "/income/",
-            {"amount_minor": 1000, "occurred_on": date.today(), "source": "gig", "note": ""},
+            {
+                "kind": "other",
+                "amount_minor": 1000,
+                "occurred_on": date.today(),
+                "source": "gig",
+                "note": "",
+                "form-TOTAL_FORMS": "0",
+                "form-INITIAL_FORMS": "0",
+            },
         )
         income = IncomeEvent.objects.get(user=self.user)
         self.assertRedirects(r, f"/income/{income.pk}/allocate/")
@@ -111,6 +125,102 @@ class ViewSmokeTests(TestCase):
         self.assertEqual(
             self.client.get(f"/income/{income.pk}/allocate/").status_code, 404
         )
+
+
+class PaychequeTests(TestCase):
+    """US-21/22/23: gross vs take-home."""
+
+    def setUp(self):
+        self.user = make_user("pay@x.com")
+
+    def cheque(self, gross=1_000_000, deds=None, source="Acme"):
+        return save_paycheque(
+            self.user,
+            gross_minor=gross,
+            occurred_on=date.today(),
+            source=source,
+            deductions=deds
+            if deds is not None
+            else [
+                {"label": "PAYE", "amount_minor": 200_000},
+                {"label": "NSSF", "amount_minor": 50_000},
+            ],
+        )
+
+    def test_takehome_is_derived(self):
+        """US-21 AC-1: amount_minor = gross − Σ deductions."""
+        income = self.cheque()
+        self.assertEqual(income.amount_minor, 750_000)
+        self.assertEqual(income.kind, IncomeEvent.Kind.PAYCHEQUE)
+
+    def test_over_deduction_blocked(self):
+        """US-21 AC-2."""
+        with self.assertRaises(ValidationError):
+            self.cheque(gross=100, deds=[{"label": "PAYE", "amount_minor": 200}])
+
+    def test_edit_below_allocated_blocked(self):
+        """US-21 AC-4: shrinking take-home under existing allocations fails."""
+        income = self.cheque()
+        rent = Bucket.objects.create(user=self.user, name="Rent")
+        set_allocations(income, [{"bucket": rent, "amount_minor": 700_000}])
+        with self.assertRaises(ValidationError):
+            save_paycheque(
+                self.user,
+                gross_minor=1_000_000,
+                occurred_on=date.today(),
+                source="Acme",
+                deductions=[{"label": "PAYE", "amount_minor": 400_000}],
+                instance=income,
+            )
+
+    def test_prefill_from_last_same_source(self):
+        """US-22 AC-1/2: same source prefills; unknown source is empty."""
+        self.cheque()
+        lines = prefill_deductions(self.user, "acme")
+        self.assertEqual([l["label"] for l in lines], ["PAYE", "NSSF"])
+        self.assertEqual(prefill_deductions(self.user, "Nowhere Inc"), [])
+
+    def test_earnings_summary(self):
+        """US-23: totals, rate, and n/a when no paycheques."""
+        self.cheque()
+        IncomeEvent.objects.create(
+            user=self.user, amount_minor=30_000, occurred_on=date.today(), source="gift"
+        )
+        s = earnings_summary(self.user)
+        self.assertEqual(s["month_totals"]["gross"], 1_000_000)
+        self.assertEqual(s["month_totals"]["takehome"], 750_000)
+        self.assertEqual(s["month_totals"]["deductions"], 250_000)
+        self.assertEqual(s["month_totals"]["rate_pct"], 25.0)
+        self.assertEqual(s["month_totals"]["other_income"], 30_000)
+
+        empty = earnings_summary(make_user("empty@x.com"))
+        self.assertIsNone(empty["month_totals"]["rate_pct"])
+
+    def test_paycheque_view_roundtrip(self):
+        """One dynamic form: kind=paycheque branch → redirect to allocation."""
+        self.client.force_login(self.user)
+        data = {
+            "kind": "paycheque",
+            "gross_minor": 500_000,
+            "occurred_on": date.today(),
+            "source": "Acme",
+            "note": "",
+            "form-TOTAL_FORMS": "2",
+            "form-INITIAL_FORMS": "0",
+            "form-0-label": "PAYE",
+            "form-0-amount_minor": "100000",
+            "form-1-label": "",
+            "form-1-amount_minor": "",
+        }
+        r = self.client.post("/income/", data)
+        income = IncomeEvent.objects.get(user=self.user)
+        self.assertRedirects(r, f"/income/{income.pk}/allocate/")
+        self.assertEqual(income.amount_minor, 400_000)
+
+    def test_earnings_view_renders(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get("/earnings/").status_code, 200)
+        self.assertEqual(self.client.get("/earnings/?month=2026-06").status_code, 200)
 
 
 class TrialTests(TestCase):

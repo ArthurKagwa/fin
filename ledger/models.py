@@ -12,9 +12,22 @@ from accounts.models import OwnedModel
 
 
 class IncomeEvent(OwnedModel):
-    """US-04: any money in — wage, gig, gift, one-off."""
+    """US-04/US-21: any money in — wage, gig, gift, one-off.
 
+    kind=paycheque records gross; amount_minor is ALWAYS take-home, the
+    allocatable amount (FR-22). Invariant for paycheques (service-enforced):
+    amount_minor = gross_minor − Σ deductions.
+    """
+
+    class Kind(models.TextChoices):
+        PAYCHEQUE = "paycheque"
+        OTHER = "other"
+
+    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.OTHER)
     amount_minor = models.BigIntegerField(validators=[MinValueValidator(1)])
+    gross_minor = models.BigIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1)]
+    )
     occurred_on = models.DateField()
     source = models.CharField(max_length=120)
     note = models.TextField(blank=True)
@@ -25,12 +38,43 @@ class IncomeEvent(OwnedModel):
             models.Index(fields=["user", "source"]),
         ]
         ordering = ["-occurred_on", "-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(kind="other", gross_minor__isnull=True)
+                    | models.Q(kind="paycheque", gross_minor__isnull=False)
+                ),
+                name="gross_iff_paycheque",
+            ),
+            models.CheckConstraint(
+                check=models.Q(gross_minor__isnull=True)
+                | models.Q(gross_minor__gte=models.F("amount_minor")),
+                name="gross_gte_takehome",
+            ),
+        ]
+
+    def deductions_total_minor(self) -> int:
+        return self.deductions.aggregate(s=models.Sum("amount_minor"))["s"] or 0
 
     def allocated_minor(self) -> int:
         return self.allocations.aggregate(s=models.Sum("amount_minor"))["s"] or 0
 
     def unallocated_minor(self) -> int:
         return self.amount_minor - self.allocated_minor()
+
+
+class Deduction(OwnedModel):
+    """US-21: one itemized deduction line on a paycheque (PAYE, NSSF, ...)."""
+
+    income_event = models.ForeignKey(
+        IncomeEvent, on_delete=models.CASCADE, related_name="deductions"
+    )
+    label = models.CharField(max_length=80)
+    amount_minor = models.BigIntegerField(validators=[MinValueValidator(1)])
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "created_at"]
 
 
 class Bucket(OwnedModel):

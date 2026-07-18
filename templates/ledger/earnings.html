@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Earnings — FinTrack{% endblock %}
+{% block content %}
+<h1>Earnings</h1>
+<form method="get">
+  <label>Month <input type="month" name="month" value="{{ month|date:'Y-m' }}"></label>
+  <button type="submit">Show</button>
+</form>
+
+<h2>{{ month|date:"F Y" }}</h2>
+<ul>
+  <li>Gross (paycheques): {{ month_totals.gross }}</li>
+  <li>Take-home (paycheques): {{ month_totals.takehome }}</li>
+  <li>Deductions: {{ month_totals.deductions }}</li>
+  <li>Effective deduction rate:
+      {% if month_totals.rate_pct is not None %}{{ month_totals.rate_pct }}%{% else %}n/a — no paycheques this month{% endif %}</li>
+  <li>Other income: {{ month_totals.other_income }}</li>
+</ul>
+
+{% if entries %}
+  <h3>Entries</h3>
+  <ul>
+    {% for e in entries %}
+      <li>
+        {{ e.occurred_on }} — {{ e.source }}:
+        {% if e.kind == "paycheque" %}
+          gross {{ e.gross_minor }} → take-home {{ e.amount_minor }}
+          (deductions {{ e.deductions_total_minor }})
+        {% else %}
+          {{ e.amount_minor }}
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>No income recorded this month. <a href="{% url 'income-list' %}">Log money in.</a></p>
+{% endif %}
+
+<h2>All time</h2>
+<ul>
+  <li>Gross: {{ alltime_totals.gross }} · Take-home: {{ alltime_totals.takehome }} ·
+      Deductions: {{ alltime_totals.deductions }} ·
+      Rate: {% if alltime_totals.rate_pct is not None %}{{ alltime_totals.rate_pct }}%{% else %}n/a{% endif %} ·
+      Other income: {{ alltime_totals.other_income }}</li>
+</ul>
+{% endblock %}

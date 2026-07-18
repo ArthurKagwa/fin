@@ -1,12 +1,21 @@
+from datetime import datetime
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .forms import BucketForm, ExpenseForm, IncomeForm
+from .forms import BucketForm, DeductionFormSet, ExpenseForm, IncomeEntryForm
 from .models import Bucket, IncomeEvent
-from .services import dashboard_summary, set_allocations
+from .services import (
+    dashboard_summary,
+    earnings_summary,
+    prefill_deductions,
+    save_paycheque,
+    set_allocations,
+)
 
 
 @login_required
@@ -42,18 +51,52 @@ def bucket_archive(request, pk):
 
 @login_required
 def income_list(request):
-    """US-04: log money in, then allocate."""
+    """US-04/US-21: one entry form; paycheque fields activate by kind (FR-22)."""
+    error = None
     if request.method == "POST":
-        form = IncomeForm(request.POST)
-        if form.is_valid():
-            income = form.save(commit=False)
-            income.user = request.user
-            income.save()
-            return redirect("income-allocate", pk=income.pk)
+        form = IncomeEntryForm(request.POST)
+        formset = DeductionFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            if form.cleaned_data["kind"] == IncomeEvent.Kind.PAYCHEQUE:
+                deductions = [
+                    {
+                        "label": f.cleaned_data["label"],
+                        "amount_minor": f.cleaned_data["amount_minor"],
+                    }
+                    for f in formset
+                    if f.cleaned_data.get("label")
+                ]
+                try:
+                    income = save_paycheque(
+                        request.user,
+                        gross_minor=form.cleaned_data["gross_minor"],
+                        occurred_on=form.cleaned_data["occurred_on"],
+                        source=form.cleaned_data["source"],
+                        note=form.cleaned_data["note"],
+                        deductions=deductions,
+                    )
+                    return redirect("income-allocate", pk=income.pk)
+                except ValidationError as e:
+                    error = "; ".join(e.message_dict.get("deductions", e.messages))
+            else:
+                income = IncomeEvent.objects.create(
+                    user=request.user,
+                    kind=IncomeEvent.Kind.OTHER,
+                    amount_minor=form.cleaned_data["amount_minor"],
+                    occurred_on=form.cleaned_data["occurred_on"],
+                    source=form.cleaned_data["source"],
+                    note=form.cleaned_data["note"],
+                )
+                return redirect("income-allocate", pk=income.pk)
     else:
-        form = IncomeForm()
+        form = IncomeEntryForm()
+        formset = DeductionFormSet()
     incomes = IncomeEvent.objects.filter(user=request.user)[:50]
-    return render(request, "ledger/income.html", {"incomes": incomes, "form": form})
+    return render(
+        request,
+        "ledger/income.html",
+        {"incomes": incomes, "form": form, "formset": formset, "error": error},
+    )
 
 
 @login_required
@@ -88,6 +131,28 @@ def income_allocate(request, pk):
         request,
         "ledger/allocate.html",
         {"income": income, "rows": rows, "error": error},
+    )
+
+
+@login_required
+def deduction_prefill(request):
+    """US-22: JSON deduction lines of the latest paycheque for ?source=."""
+    source = request.GET.get("source", "")
+    return JsonResponse({"deductions": prefill_deductions(request.user, source)})
+
+
+@login_required
+def earnings_report(request):
+    """US-23: gross vs take-home, monthly + all-time."""
+    month = None
+    raw = request.GET.get("month")
+    if raw:
+        try:
+            month = datetime.strptime(raw, "%Y-%m").date().replace(day=1)
+        except ValueError:
+            month = None
+    return render(
+        request, "ledger/earnings.html", earnings_summary(request.user, month)
     )
 
 

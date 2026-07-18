@@ -1,12 +1,19 @@
 from django.contrib import admin
 
-from .models import Allocation, Bucket, Expense, IncomeEvent
+from .models import Allocation, Bucket, Deduction, Expense, IncomeEvent
+
+
+class DeductionInline(admin.TabularInline):
+    model = Deduction
+    extra = 0
 
 
 @admin.register(IncomeEvent)
 class IncomeEventAdmin(admin.ModelAdmin):
-    list_display = ("user", "occurred_on", "amount_minor", "source")
+    list_display = ("user", "occurred_on", "kind", "gross_minor", "amount_minor", "source")
+    list_filter = ("kind",)
     search_fields = ("user__email", "source")
+    inlines = [DeductionInline]
 
 
 @admin.register(Bucket)

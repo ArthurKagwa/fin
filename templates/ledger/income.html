@@ -2,22 +2,108 @@
 {% block title %}Money in — FinTrack{% endblock %}
 {% block content %}
 <h1>Money in</h1>
+<p><a href="{% url 'earnings-report' %}">Earnings report</a></p>
+
 <h2>Log money in</h2>
-<form method="post">
+{% if error %}<p style="color:red">{{ error }}</p>{% endif %}
+<form method="post" id="income-form">
   {% csrf_token %}
-  {{ form.as_p }}
+  <p>Type: {{ form.kind }}</p>
+  {{ form.kind.errors }}
+
+  <div id="other-fields">
+    <p>{{ form.amount_minor.label_tag }} {{ form.amount_minor }} {{ form.amount_minor.errors }}</p>
+  </div>
+
+  <div id="paycheque-fields">
+    <p>{{ form.gross_minor.label_tag }} {{ form.gross_minor }} {{ form.gross_minor.errors }}</p>
+    <fieldset>
+      <legend>Deductions</legend>
+      {{ formset.management_form }}
+      {% for f in formset %}
+        <p>{{ f.label.label_tag }} {{ f.label }} {{ f.amount_minor.label_tag }} {{ f.amount_minor }}
+           {{ f.non_field_errors }}</p>
+      {% endfor %}
+      <p><strong>Take-home: <span id="takehome">—</span></strong> (gross − deductions, verified on save)</p>
+    </fieldset>
+  </div>
+
+  <p>{{ form.occurred_on.label_tag }} {{ form.occurred_on }} {{ form.occurred_on.errors }}</p>
+  <p>{{ form.source.label_tag }} {{ form.source }} {{ form.source.errors }}</p>
+  <p>{{ form.note.label_tag }} {{ form.note }}</p>
   <button type="submit">Save and allocate</button>
 </form>
+
 {% if incomes %}
   <h2>Recent</h2>
   <ul>
     {% for i in incomes %}
       <li>
-        {{ i.occurred_on }} — {{ i.amount_minor }} from {{ i.source }}
-        (unallocated {{ i.unallocated_minor }})
+        {{ i.occurred_on }} —
+        {% if i.kind == "paycheque" %}
+          gross {{ i.gross_minor }} → take-home {{ i.amount_minor }}
+        {% else %}
+          {{ i.amount_minor }}
+        {% endif %}
+        from {{ i.source }} (unallocated {{ i.unallocated_minor }})
         <a href="{% url 'income-allocate' i.pk %}">Allocate</a>
       </li>
     {% endfor %}
   </ul>
 {% endif %}
+
+<script>
+(function () {
+  var form = document.getElementById("income-form");
+  var otherFields = document.getElementById("other-fields");
+  var paychequeFields = document.getElementById("paycheque-fields");
+  var gross = form.querySelector("[name=gross_minor]");
+  var source = form.querySelector("[name=source]");
+
+  function currentKind() {
+    var checked = form.querySelector("[name=kind]:checked");
+    return checked ? checked.value : "other";
+  }
+
+  function toggle() {
+    var pay = currentKind() === "paycheque";
+    paychequeFields.style.display = pay ? "" : "none";
+    otherFields.style.display = pay ? "none" : "";
+  }
+
+  function recompute() {
+    var g = parseInt(gross.value || "0", 10);
+    var total = 0;
+    form.querySelectorAll("[name^='form-'][name$='amount_minor']").forEach(function (el) {
+      total += parseInt(el.value || "0", 10);
+    });
+    var t = g - total;
+    document.getElementById("takehome").textContent = isNaN(t) ? "—" : t;
+  }
+
+  form.querySelectorAll("[name=kind]").forEach(function (radio) {
+    radio.addEventListener("change", toggle);
+  });
+  form.addEventListener("input", recompute);
+
+  source.addEventListener("blur", function () {
+    if (!source.value || currentKind() !== "paycheque") return;
+    fetch("{% url 'deduction-prefill' %}?source=" + encodeURIComponent(source.value))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var labels = form.querySelectorAll("[name^='form-'][name$='-label']");
+        var amounts = form.querySelectorAll("[name^='form-'][name$='amount_minor']");
+        if (labels.length && labels[0].value === "") {
+          data.deductions.forEach(function (d, i) {
+            if (labels[i]) { labels[i].value = d.label; amounts[i].value = d.amount_minor; }
+          });
+          recompute();
+        }
+      });
+  });
+
+  toggle();
+  recompute();
+})();
+</script>
 {% endblock %}

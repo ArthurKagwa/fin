@@ -10,7 +10,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from .models import Allocation, Bucket, Expense, IncomeEvent
+from .models import Allocation, Bucket, Deduction, Expense, IncomeEvent
 
 
 @transaction.atomic
@@ -39,6 +39,127 @@ def set_allocations(income_event: IncomeEvent, splits: list[dict]) -> None:
         )
         for s in splits
     )
+
+
+@transaction.atomic
+def save_paycheque(
+    user,
+    *,
+    gross_minor: int,
+    occurred_on,
+    source: str,
+    note: str = "",
+    deductions: list[dict],
+    instance: IncomeEvent | None = None,
+) -> IncomeEvent:
+    """Create or update a paycheque (US-21). Take-home is derived, never given.
+
+    deductions: [{"label": str, "amount_minor": int}, ...]
+    Enforces: Σ deductions ≤ gross (AC-2); on edit, new take-home must cover
+    existing allocations (AC-4, FR-08 rule).
+    """
+    total_deductions = sum(d["amount_minor"] for d in deductions)
+    if total_deductions > gross_minor:
+        raise ValidationError(
+            {"deductions": f"Deductions {total_deductions} exceed gross {gross_minor}."}
+        )
+    takehome = gross_minor - total_deductions
+    if takehome <= 0:
+        raise ValidationError({"deductions": "Take-home must be above zero."})
+
+    if instance is not None:
+        allocated = instance.allocated_minor()
+        if takehome < allocated:
+            raise ValidationError(
+                {
+                    "deductions": (
+                        f"New take-home {takehome} is below the {allocated} already "
+                        "allocated. Fix allocations first."
+                    )
+                }
+            )
+        income = instance
+    else:
+        income = IncomeEvent(user=user)
+
+    income.kind = IncomeEvent.Kind.PAYCHEQUE
+    income.gross_minor = gross_minor
+    income.amount_minor = takehome
+    income.occurred_on = occurred_on
+    income.source = source
+    income.note = note
+    income.save()
+    income.deductions.all().delete()
+    Deduction.objects.bulk_create(
+        Deduction(
+            user=user,
+            income_event=income,
+            label=d["label"],
+            amount_minor=d["amount_minor"],
+            sort_order=i,
+        )
+        for i, d in enumerate(deductions)
+    )
+    return income
+
+
+def prefill_deductions(user, source: str) -> list[dict]:
+    """US-22: deduction lines of the latest paycheque with the same source."""
+    last = (
+        IncomeEvent.objects.filter(
+            user=user, kind=IncomeEvent.Kind.PAYCHEQUE, source__iexact=source.strip()
+        )
+        .order_by("-occurred_on", "-created_at")
+        .first()
+    )
+    if last is None:
+        return []
+    return [
+        {"label": d.label, "amount_minor": d.amount_minor}
+        for d in last.deductions.all()
+    ]
+
+
+def earnings_summary(user, month=None) -> dict:
+    """US-23: gross vs take-home for one month plus an all-time summary.
+
+    Rate is None (n/a) when a period has no paycheques — never a fake 0%.
+    """
+    today = timezone.localdate()
+    month = month or today.replace(day=1)
+    if month.month == 12:
+        next_month = month.replace(year=month.year + 1, month=1)
+    else:
+        next_month = month.replace(month=month.month + 1)
+
+    def totals(qs):
+        pay = qs.filter(kind=IncomeEvent.Kind.PAYCHEQUE).aggregate(
+            gross=Sum("gross_minor"), takehome=Sum("amount_minor")
+        )
+        other = (
+            qs.filter(kind=IncomeEvent.Kind.OTHER).aggregate(s=Sum("amount_minor"))["s"]
+            or 0
+        )
+        gross = pay["gross"] or 0
+        takehome = pay["takehome"] or 0
+        deductions = gross - takehome
+        return {
+            "gross": gross,
+            "takehome": takehome,
+            "deductions": deductions,
+            "other_income": other,
+            "rate_pct": round(deductions * 100 / gross, 1) if gross else None,
+        }
+
+    month_qs = IncomeEvent.objects.filter(
+        user=user, occurred_on__gte=month, occurred_on__lt=next_month
+    )
+    return {
+        "month": month,
+        "month_totals": totals(month_qs),
+        "alltime_totals": totals(IncomeEvent.objects.filter(user=user)),
+        "entries": list(month_qs.prefetch_related("deductions")),
+    }
 
 
 def unallocated_total_minor(user) -> int:
