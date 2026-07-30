@@ -27,4 +27,11 @@ class SignInController extends _$SignInController {
           ),
     );
   }
+
+  Future<void> signInWithGoogle() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(authRepositoryProvider).signInWithGoogle(),
+    );
+  }
 }

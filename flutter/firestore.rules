@@ -1,8 +1,17 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default deny — all access requires explicit rules.
-    // Rules are added per-feature as collections are introduced.
+    // Every user's data lives at users/{uid} (profile doc) and
+    // users/{uid}/** (feature subcollections) — only that user may read or
+    // write their own tree.
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Default deny — all other access requires explicit rules.
     match /{document=**} {
       allow read, write: if false;
     }
