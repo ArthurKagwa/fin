@@ -8,6 +8,8 @@ import 'package:fintrack/features/buckets/presentation/buckets_screen.dart';
 import 'package:fintrack/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:fintrack/features/income/presentation/income_list_screen.dart';
 import 'package:fintrack/features/onboarding/presentation/currency_setup_screen.dart';
+import 'package:fintrack/features/planning/presentation/plan_editor_screen.dart';
+import 'package:fintrack/features/planning/presentation/plan_vs_actual_screen.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
 import 'package:fintrack/features/recurring/presentation/recurring_screen.dart';
 import 'package:fintrack/features/settings/presentation/settings_screen.dart';
@@ -74,6 +76,14 @@ GoRouter router(Ref ref) {
         path: '/buckets/:id',
         builder: (context, state) =>
             BucketDetailScreen(bucketId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/plan',
+        builder: (context, state) => const PlanVsActualScreen(),
+      ),
+      GoRoute(
+        path: '/plan/edit',
+        builder: (context, state) => const PlanEditorScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) =>

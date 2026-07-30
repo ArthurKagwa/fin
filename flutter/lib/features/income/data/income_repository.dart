@@ -7,7 +7,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'income_repository.g.dart';
 
 abstract class IncomeRepository {
-  Stream<List<IncomeEvent>> watchIncomeEvents();
+  Stream<List<IncomeEvent>> watchIncomeEvents({DateTime? month});
   Future<IncomeEvent> addIncomeEvent({
     required IncomeKind kind,
     required int amountMinor,
@@ -29,8 +29,17 @@ class FirestoreIncomeRepository implements IncomeRepository {
       _firestore.collection('users').doc(_uid).collection('incomeEvents');
 
   @override
-  Stream<List<IncomeEvent>> watchIncomeEvents() {
-    return _collection.orderBy('occurredOn', descending: true).snapshots().map(
+  Stream<List<IncomeEvent>> watchIncomeEvents({DateTime? month}) {
+    Query<Map<String, dynamic>> query =
+        _collection.orderBy('occurredOn', descending: true);
+    if (month != null) {
+      final start = DateTime(month.year, month.month);
+      final end = DateTime(month.year, month.month + 1);
+      query = query
+          .where('occurredOn', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+          .where('occurredOn', isLessThan: Timestamp.fromDate(end));
+    }
+    return query.snapshots().map(
           (snapshot) => snapshot.docs.map(_fromDoc).toList(),
         );
   }
@@ -102,3 +111,7 @@ IncomeRepository incomeRepository(Ref ref) {
 @Riverpod(keepAlive: true)
 Stream<List<IncomeEvent>> incomeEvents(Ref ref) =>
     ref.watch(incomeRepositoryProvider).watchIncomeEvents();
+
+@riverpod
+Stream<List<IncomeEvent>> incomeEventsForMonth(Ref ref, DateTime month) =>
+    ref.watch(incomeRepositoryProvider).watchIncomeEvents(month: month);

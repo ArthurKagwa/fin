@@ -8,13 +8,14 @@ _Last updated: 2026-07-30_
 | FR-03 | Per-user currency + timezone | Not started | — | |
 | FR-04 | Income logging (any source, any frequency) | Not started | — | |
 | FR-05 | Paycheque: gross + itemised deductions | Not started | — | |
-| FR-06 | Budget buckets with planned amounts + goals | In progress | `flutter/lib/features/buckets/` | Create/read/update/delete done; dashboard pace/allocation tracking against goals is separate (FR-12) |
+| FR-06 | Budget buckets with planned amounts + goals | In progress | `flutter/lib/features/buckets/` | Create/read/update/delete done; per-month planned amounts now snapshot into `monthlyPlans/` (FR-17). Goal progress still needs carry-over balances from allocation (FR-08) |
 | FR-07 | Daily expense entry (≤4 taps) | Not started | — | |
 | FR-08 | Allocation of income across buckets | Not started | — | |
 | FR-09 | Unallocated-funds tracking | Not started | — | |
 | FR-10 | Recurring payment registry | Not started | — | |
 | FR-11 | Amount-change history for recurring payments | Not started | — | |
-| FR-12 | Dashboard: bucket status + pace | Not started | — | |
+| FR-12 | Dashboard: bucket status + pace | Done | `flutter/lib/features/planning/` | Pace-adjusted three-state ladder (on track / off pace / off plan) on the summary card and every bucket card |
+| FR-17 | Planned vs actual income and spend | Done | `flutter/lib/features/planning/` | Expected income sources + per-bucket planned spend, snapshotted per month; dashboard card plus `/plan` report with month picker |
 | FR-13 | Upcoming recurring charges | Not started | — | |
 | FR-14 | CSV import with mapping + dedup | Not started | — | |
 | FR-15 | 3-month trial, then freemium gate | Not started | — | |
@@ -28,7 +29,9 @@ _Last updated: 2026-07-30_
 | US-09 | Add recurring payment + first rate period | Not started | — | |
 | US-10 | Confirm / skip an occurrence | Not started | — | |
 | US-11 | Record amount change (new rate period) | Not started | — | |
-| US-13 | Dashboard with pace framing | Not started | — | |
+| US-13 | Dashboard with pace framing | Done | `flutter/lib/features/planning/` | Headline "left to spend", bullet bars with a pace tick, straight-line projection once ≥25% of the month has run |
+| US-24 | Set expected income for a month | Done | `flutter/lib/features/planning/presentation/plan_editor_screen.dart` | Named sources so a shortfall says which income didn't land; carried forward month to month |
+| US-25 | Compare a past month against its own plan | Done | `flutter/lib/features/planning/presentation/plan_vs_actual_screen.dart` | Month picker; months with no recorded plan are labelled as shown against current bucket amounts |
 | US-17 | Trial management + free-tier gating | Not started | — | |
 | US-18 | Admin / ops tooling | Not started | — | |
 | US-20 | Bucket planning + goals | Not started | — | |
@@ -51,6 +54,25 @@ _Last updated: 2026-07-30_
 - [x] Repository interfaces + `UnimplementedError` stubs for all features
 - [x] `firestore.rules` (default deny), `firebase.json`, `firestore.indexes.json`
 - [x] `flutter analyze` clean
+
+## Planned vs actual — notes for whoever picks this up next
+
+- **Firestore**: `users/{uid}/monthlyPlans/{YYYY-MM}` = `{month, expectedIncomes[], bucketPlans{}, createdAt, updatedAt}`.
+  Covered by the existing `users/{uid}/{document=**}` rule, and doc-ID reads plus a
+  single-field `month` query, so neither `firestore.rules` nor
+  `firestore.indexes.json` needed changing.
+- **Snapshot timing**: the current month is frozen once, from the dashboard's
+  `initState`. Past months are never retro-written — a month with no snapshot
+  renders against current bucket defaults and says so.
+- **Pace is straight-line**, which misreads a bucket dominated by one fixed
+  charge (rent on the 1st reads as ahead of pace all month). The three-state
+  ladder keeps that amber rather than red. Fixing it properly means making the
+  report aware of recurring payments — deliberately out of scope here.
+- **Two things were removed from the dashboard rather than left showing zeros**:
+  the unallocated-funds banner (`unallocatedMinor` is hardcoded `0` until
+  FR-08) and the goal-progress percentage (needs carry-over balances). Both
+  should come back with allocation. `dashboard_repository.dart` and
+  `dashboard_summary.dart` are untouched and unused, waiting for that work.
 
 ## Open questions
 - **Q-01**: Firebase project not yet created. Run `flutterfire configure` to generate `firebase_options.dart` and `android/app/google-services.json`.

@@ -38,6 +38,10 @@ abstract final class AppColors {
   static const onErrorContainer = Color(0xFF93000a);
   static const background = Color(0xFFfef8f5);
   static const onBackground = Color(0xFF1d1b19);
+
+  /// Drifting off pace but not yet off plan. Deliberately not [error] — a
+  /// month that is merely running fast is a fact to notice, not a failure.
+  static const caution = Color(0xFFB8860B);
 }
 
 const editorialShadow = BoxShadow(
