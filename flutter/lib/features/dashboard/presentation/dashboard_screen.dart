@@ -244,99 +244,103 @@ class _BucketCard extends ConsumerWidget {
     final goalMinor = bucketSummary.bucket.goalMinor;
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.push('/buckets/${bucketSummary.bucket.id}'),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          bucketSummary.bucket.name,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${formatMoney(bucketSummary.spentThisMonthMinor, symbol: currency)} spent of ${formatMoney(planned, symbol: currency)}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        bucketSummary.bucket.name,
-                        style: Theme.of(context).textTheme.titleMedium,
+                        formatMoney(bucketSummary.balanceMinor, symbol: currency),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              color: isOverspent ? colorScheme.error : colorScheme.onSurface,
+                            ),
                       ),
-                      const SizedBox(height: 2),
                       Text(
-                        '${formatMoney(bucketSummary.spentThisMonthMinor, symbol: currency)} spent of ${formatMoney(planned, symbol: currency)}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        'remaining',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
                       ),
                     ],
                   ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: spentRatio.clamp(0, 1),
+                  minHeight: 6,
+                  backgroundColor: colorScheme.surfaceContainerHigh,
+                  valueColor: AlwaysStoppedAnimation(paceColor),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(
+                    isOverspent ? Icons.error_outline : Icons.check_circle_outline,
+                    size: 14,
+                    color: paceColor,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    paceLabel,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(color: paceColor),
+                  ),
+                ],
+              ),
+              if (goalMinor != null) ...[
+                const SizedBox(height: 12),
+                Divider(height: 1, color: colorScheme.outline.withValues(alpha: 0.15)),
+                const SizedBox(height: 12),
+                Row(
                   children: [
+                    Icon(Icons.flag_outlined, size: 16, color: colorScheme.secondary),
+                    const SizedBox(width: 6),
                     Text(
-                      formatMoney(bucketSummary.balanceMinor, symbol: currency),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: isOverspent ? colorScheme.error : colorScheme.onSurface,
-                          ),
+                      'Goal: ${formatMoney(goalMinor, symbol: currency)}',
+                      style: Theme.of(context).textTheme.labelMedium,
                     ),
+                    const Spacer(),
                     Text(
-                      'remaining',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                      '${((bucketSummary.carriedOverMinor / goalMinor) * 100).clamp(0, 100).round()}%',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: colorScheme.secondary,
                           ),
                     ),
                   ],
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: spentRatio.clamp(0, 1),
-                minHeight: 6,
-                backgroundColor: colorScheme.surfaceContainerHigh,
-                valueColor: AlwaysStoppedAnimation(paceColor),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Icon(
-                  isOverspent ? Icons.error_outline : Icons.check_circle_outline,
-                  size: 14,
-                  color: paceColor,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  paceLabel,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(color: paceColor),
-                ),
-              ],
-            ),
-            if (goalMinor != null) ...[
-              const SizedBox(height: 12),
-              Divider(height: 1, color: colorScheme.outline.withValues(alpha: 0.15)),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(Icons.flag_outlined, size: 16, color: colorScheme.secondary),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Goal: ${formatMoney(goalMinor, symbol: currency)}',
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${((bucketSummary.carriedOverMinor / goalMinor) * 100).clamp(0, 100).round()}%',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: colorScheme.secondary,
-                        ),
-                  ),
-                ],
-              ),
             ],
-          ],
+          ),
         ),
       ),
     );

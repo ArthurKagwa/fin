@@ -1,5 +1,5 @@
 # Implementation status
-_Last updated: 2026-07-24_
+_Last updated: 2026-07-30_
 
 | ID | Requirement | Status | Where | Notes |
 |----|-------------|--------|-------|-------|
@@ -8,7 +8,7 @@ _Last updated: 2026-07-24_
 | FR-03 | Per-user currency + timezone | Not started | — | |
 | FR-04 | Income logging (any source, any frequency) | Not started | — | |
 | FR-05 | Paycheque: gross + itemised deductions | Not started | — | |
-| FR-06 | Budget buckets with planned amounts + goals | Not started | — | |
+| FR-06 | Budget buckets with planned amounts + goals | In progress | `flutter/lib/features/buckets/` | Create/read/update/delete done; dashboard pace/allocation tracking against goals is separate (FR-12) |
 | FR-07 | Daily expense entry (≤4 taps) | Not started | — | |
 | FR-08 | Allocation of income across buckets | Not started | — | |
 | FR-09 | Unallocated-funds tracking | Not started | — | |
@@ -21,7 +21,7 @@ _Last updated: 2026-07-24_
 | FR-16 | Freemium limits (5 buckets, 3 recurring) | Not started | — | |
 | US-01 | Signup: email + password, currency confirmation | Not started | — | |
 | US-04 | Log income (paycheque or one-off) | Not started | — | |
-| US-05 | Create and manage buckets | Not started | — | |
+| US-05 | Create and manage buckets | Done | `flutter/lib/features/buckets/` | Full CRUD: create, list, edit (name/planned/goal), delete with confirmation |
 | US-06 | Allocate income to buckets | Not started | — | |
 | US-07 | Log daily expenses (fast path) | Not started | — | |
 | US-08 | Overspend: warn, never block | Not started | — | |

@@ -2,6 +2,8 @@ import 'package:fintrack/core/widgets/scaffold_with_nav.dart';
 import 'package:fintrack/features/auth/data/auth_repository.dart';
 import 'package:fintrack/features/auth/presentation/sign_in_screen.dart';
 import 'package:fintrack/features/auth/presentation/verify_email_screen.dart';
+import 'package:fintrack/features/buckets/presentation/bucket_detail_screen.dart';
+import 'package:fintrack/features/buckets/presentation/bucket_form_screen.dart';
 import 'package:fintrack/features/buckets/presentation/buckets_screen.dart';
 import 'package:fintrack/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:fintrack/features/income/presentation/income_list_screen.dart';
@@ -58,6 +60,20 @@ GoRouter router(Ref ref) {
       GoRoute(
         path: '/buckets',
         builder: (context, state) => const BucketsScreen(),
+      ),
+      GoRoute(
+        path: '/buckets/new',
+        builder: (context, state) => const BucketFormScreen(),
+      ),
+      GoRoute(
+        path: '/buckets/:id/edit',
+        builder: (context, state) =>
+            BucketFormScreen(bucketId: state.pathParameters['id']),
+      ),
+      GoRoute(
+        path: '/buckets/:id',
+        builder: (context, state) =>
+            BucketDetailScreen(bucketId: state.pathParameters['id']!),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) =>

@@ -1,9 +1,9 @@
 import 'package:fintrack/core/utils/money.dart';
 import 'package:fintrack/features/buckets/data/bucket_repository.dart';
-import 'package:fintrack/features/buckets/presentation/bucket_controller.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 class BucketsScreen extends ConsumerWidget {
   const BucketsScreen({super.key});
@@ -19,7 +19,7 @@ class BucketsScreen extends ConsumerWidget {
         title: Text('Buckets', style: Theme.of(context).textTheme.headlineMedium),
         actions: [
           IconButton(
-            onPressed: () => _showCreateDialog(context, ref),
+            onPressed: () => context.push('/buckets/new'),
             icon: const Icon(Icons.add),
           ),
         ],
@@ -49,7 +49,7 @@ class BucketsScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 20),
                     FilledButton(
-                      onPressed: () => _showCreateDialog(context, ref),
+                      onPressed: () => context.push('/buckets/new'),
                       child: const Text('Create a bucket'),
                     ),
                   ],
@@ -64,75 +64,29 @@ class BucketsScreen extends ConsumerWidget {
             itemBuilder: (context, index) {
               final bucket = buckets[index];
               return Card(
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: CircleAvatar(
-                    backgroundColor: colorScheme.primaryFixed,
-                    foregroundColor: colorScheme.primary,
-                    child: Text(bucket.name.substring(0, 1)),
-                  ),
-                  title: Text(bucket.name, style: Theme.of(context).textTheme.titleMedium),
-                  subtitle: Text(
-                    bucket.goalMinor != null
-                        ? 'Planned ${formatMoney(bucket.plannedMinor ?? 0, symbol: currency)} · Goal ${formatMoney(bucket.goalMinor!, symbol: currency)}'
-                        : 'Planned ${formatMoney(bucket.plannedMinor ?? 0, symbol: currency)}',
-                  ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.archive_outlined),
-                    onPressed: () => ref.read(bucketControllerProvider.notifier).archive(bucket.id),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => context.push('/buckets/${bucket.id}'),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    leading: CircleAvatar(
+                      backgroundColor: colorScheme.primaryFixed,
+                      foregroundColor: colorScheme.primary,
+                      child: Text(bucket.name.substring(0, 1)),
+                    ),
+                    title: Text(bucket.name, style: Theme.of(context).textTheme.titleMedium),
+                    subtitle: Text(
+                      bucket.goalMinor != null
+                          ? 'Planned ${formatMoney(bucket.plannedMinor ?? 0, symbol: currency)} · Goal ${formatMoney(bucket.goalMinor!, symbol: currency)}'
+                          : 'Planned ${formatMoney(bucket.plannedMinor ?? 0, symbol: currency)}',
+                    ),
+                    trailing: Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
                   ),
                 ),
               );
             },
           );
         },
-      ),
-    );
-  }
-
-  void _showCreateDialog(BuildContext context, WidgetRef ref) {
-    final nameController = TextEditingController();
-    final plannedController = TextEditingController();
-
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('New bucket'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Name'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: plannedController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Planned amount (optional)'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
-              final planned = int.tryParse(plannedController.text.replaceAll(',', ''));
-              ref.read(bucketControllerProvider.notifier).create(
-                    name: name,
-                    plannedMinor: planned,
-                  );
-              Navigator.of(dialogContext).pop();
-            },
-            child: const Text('Create'),
-          ),
-        ],
       ),
     );
   }

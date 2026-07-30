@@ -9,7 +9,13 @@ part 'bucket_repository.g.dart';
 abstract class BucketRepository {
   Stream<List<Bucket>> watchActiveBuckets();
   Future<void> createBucket({required String name, int? plannedMinor, int? goalMinor});
-  Future<void> archiveBucket(String id);
+  Future<void> updateBucket(
+    String id, {
+    required String name,
+    int? plannedMinor,
+    int? goalMinor,
+  });
+  Future<void> deleteBucket(String id);
 }
 
 class FirestoreBucketRepository implements BucketRepository {
@@ -23,12 +29,10 @@ class FirestoreBucketRepository implements BucketRepository {
 
   @override
   Stream<List<Bucket>> watchActiveBuckets() {
-    return _collection.orderBy('sortOrder').snapshots().map(
-          (snapshot) => snapshot.docs
-              .map(_fromDoc)
-              .where((bucket) => !bucket.isArchived)
-              .toList(),
-        );
+    return _collection
+        .orderBy('sortOrder')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map(_fromDoc).toList());
   }
 
   @override
@@ -45,13 +49,24 @@ class FirestoreBucketRepository implements BucketRepository {
       'sortOrder': nextSortOrder,
       'plannedMinor': plannedMinor,
       'goalMinor': goalMinor,
-      'archivedAt': null,
     });
   }
 
   @override
-  Future<void> archiveBucket(String id) =>
-      _collection.doc(id).update({'archivedAt': Timestamp.now()});
+  Future<void> updateBucket(
+    String id, {
+    required String name,
+    int? plannedMinor,
+    int? goalMinor,
+  }) =>
+      _collection.doc(id).update({
+        'name': name,
+        'plannedMinor': plannedMinor,
+        'goalMinor': goalMinor,
+      });
+
+  @override
+  Future<void> deleteBucket(String id) => _collection.doc(id).delete();
 
   Bucket _fromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
@@ -61,7 +76,6 @@ class FirestoreBucketRepository implements BucketRepository {
       sortOrder: data['sortOrder'] as int,
       plannedMinor: data['plannedMinor'] as int?,
       goalMinor: data['goalMinor'] as int?,
-      archivedAt: (data['archivedAt'] as Timestamp?)?.toDate(),
     );
   }
 }
