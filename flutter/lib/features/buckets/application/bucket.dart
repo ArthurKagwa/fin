@@ -5,7 +5,6 @@ class Bucket {
     required this.sortOrder,
     this.plannedMinor,
     this.goalMinor,
-    this.archivedAt,
   });
 
   final String id;
@@ -13,9 +12,6 @@ class Bucket {
   final int sortOrder;
   final int? plannedMinor;
   final int? goalMinor;
-  final DateTime? archivedAt;
-
-  bool get isArchived => archivedAt != null;
 
   Bucket copyWith({
     String? id,
@@ -23,7 +19,6 @@ class Bucket {
     int? sortOrder,
     int? plannedMinor,
     int? goalMinor,
-    DateTime? archivedAt,
   }) {
     return Bucket(
       id: id ?? this.id,
@@ -31,7 +26,6 @@ class Bucket {
       sortOrder: sortOrder ?? this.sortOrder,
       plannedMinor: plannedMinor ?? this.plannedMinor,
       goalMinor: goalMinor ?? this.goalMinor,
-      archivedAt: archivedAt ?? this.archivedAt,
     );
   }
 }

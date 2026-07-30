@@ -19,8 +19,25 @@ class BucketController extends _$BucketController {
     );
   }
 
-  Future<void> archive(String id) async {
+  Future<void> update({
+    required String id,
+    required String name,
+    int? plannedMinor,
+    int? goalMinor,
+  }) async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() => ref.read(bucketRepositoryProvider).archiveBucket(id));
+    state = await AsyncValue.guard(
+      () => ref.read(bucketRepositoryProvider).updateBucket(
+            id,
+            name: name,
+            plannedMinor: plannedMinor,
+            goalMinor: goalMinor,
+          ),
+    );
+  }
+
+  Future<void> delete(String id) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => ref.read(bucketRepositoryProvider).deleteBucket(id));
   }
 }
