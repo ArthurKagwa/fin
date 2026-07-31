@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The Flutter template declares INTERNET only in the debug and
+         profile manifests, for the dev tooling. Release builds use this
+         manifest alone, so without this line a release APK cannot make a
+         single network call — every Firebase request fails silently and
+         the app looks like it simply won't connect. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Required on Android 13+ to show any notification, including the
          evening reminder — without it, scheduling succeeds but nothing
          ever appears. -->
