@@ -62,29 +62,36 @@ int? parseMoney(String text, {required String currency}) {
   final negative = trimmed.startsWith('-');
   var body = negative ? trimmed.substring(1) : trimmed;
 
-  // Whichever separator appears last is the decimal point; anything else is
-  // grouping.
-  final lastDot = body.lastIndexOf('.');
-  final lastComma = body.lastIndexOf(',');
-  final decimalIndex = lastDot > lastComma ? lastDot : lastComma;
+  final decimals = currencyDecimals(currency);
+  final divisor = currencyMinorUnitsPerMajor(currency);
 
   String whole;
   String fraction;
-  if (decimalIndex == -1) {
+  if (decimals == 0) {
+    // A zero-decimal currency has no fractional part to find, so every
+    // separator is grouping — treating the last one as a decimal point would
+    // read "1,200" UGX as 1.2 shillings instead of twelve hundred.
     whole = body;
     fraction = '';
   } else {
-    whole = body.substring(0, decimalIndex);
-    fraction = body.substring(decimalIndex + 1);
+    // Whichever separator appears last is the decimal point; anything else is
+    // grouping.
+    final lastDot = body.lastIndexOf('.');
+    final lastComma = body.lastIndexOf(',');
+    final decimalIndex = lastDot > lastComma ? lastDot : lastComma;
+    if (decimalIndex == -1) {
+      whole = body;
+      fraction = '';
+    } else {
+      whole = body.substring(0, decimalIndex);
+      fraction = body.substring(decimalIndex + 1);
+    }
   }
 
   whole = whole.replaceAll(RegExp(r'[.,\s]'), '');
   if (whole.isEmpty) whole = '0';
   if (!RegExp(r'^\d+$').hasMatch(whole)) return null;
   if (fraction.isNotEmpty && !RegExp(r'^\d+$').hasMatch(fraction)) return null;
-
-  final decimals = currencyDecimals(currency);
-  final divisor = currencyMinorUnitsPerMajor(currency);
 
   var minor = int.parse(whole) * divisor;
   if (decimals > 0 && fraction.isNotEmpty) {

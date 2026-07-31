@@ -9,6 +9,9 @@ part 'profile_repository.g.dart';
 abstract class ProfileRepository {
   Stream<UserProfile?> watchProfile();
   Future<void> setCurrency({required String currencyCode, required String timezone});
+
+  /// Sets the evening reminder time, or clears it when both are null.
+  Future<void> setReminder({int? hour, int? minute});
 }
 
 class FirestoreProfileRepository implements ProfileRepository {
@@ -29,6 +32,9 @@ class FirestoreProfileRepository implements ProfileRepository {
         currencyCode: data['currencyCode'] as String,
         timezone: data['timezone'] as String,
         currencySetAt: (data['currencySetAt'] as Timestamp).toDate(),
+        unallocatedMinor: (data['unallocatedMinor'] as num?)?.toInt() ?? 0,
+        reminderHour: (data['reminderHour'] as num?)?.toInt(),
+        reminderMinute: (data['reminderMinute'] as num?)?.toInt(),
       );
     });
   }
@@ -39,6 +45,14 @@ class FirestoreProfileRepository implements ProfileRepository {
       'currencyCode': currencyCode,
       'timezone': timezone,
       'currencySetAt': Timestamp.now(),
+    }, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> setReminder({int? hour, int? minute}) {
+    return _doc.set({
+      'reminderHour': hour,
+      'reminderMinute': minute,
     }, SetOptions(merge: true));
   }
 }
@@ -57,3 +71,7 @@ Stream<UserProfile?> userProfile(Ref ref) =>
 @Riverpod(keepAlive: true)
 String currencyCode(Ref ref) =>
     ref.watch(userProfileProvider).asData?.value?.currencyCode ?? 'USD';
+
+@Riverpod(keepAlive: true)
+int unallocatedMinor(Ref ref) =>
+    ref.watch(userProfileProvider).asData?.value?.unallocatedMinor ?? 0;

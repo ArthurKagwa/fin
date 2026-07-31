@@ -41,7 +41,43 @@ abstract final class AppColors {
 
   /// Drifting off pace but not yet off plan. Deliberately not [error] — a
   /// month that is merely running fast is a fact to notice, not a failure.
+  /// One value for both themes: it already reads clearly against a dark
+  /// surface, and it isn't part of the M3 [ColorScheme] this file otherwise
+  /// mirrors light/dark for.
   static const caution = Color(0xFFB8860B);
+}
+
+/// The dark counterpart to [AppColors] — same M3 roles, same brand hues
+/// (terracotta primary, green secondary), lightened/darkened per Material 3's
+/// dark-theme convention rather than just inverting light values naively.
+abstract final class _AppDarkColors {
+  static const primary = Color(0xFFffb4a4); // AppColors.primaryFixedDim
+  static const onPrimary = Color(0xFF5c1608);
+  static const primaryContainer = Color(0xFF7d2a17);
+  static const onPrimaryContainer = Color(0xFFffdad3); // AppColors.primaryFixed
+  static const secondary = Color(0xFF9bd1a8);
+  static const onSecondary = Color(0xFF04391c);
+  static const secondaryContainer = Color(0xFF1f4e2f);
+  static const onSecondaryContainer = Color(0xFFb6edc2);
+  static const tertiary = Color(0xFFccc5bf); // AppColors.tertiaryFixedDim
+  static const onTertiary = Color(0xFF322f2a);
+  static const tertiaryContainer = Color(0xFF4a4641);
+  static const onTertiaryContainer = Color(0xFFe4e1db);
+  static const surface = Color(0xFF15130f);
+  static const onSurface = Color(0xFFe7e1de); // AppColors.surfaceContainerHighest
+  static const onSurfaceVariant = Color(0xFFd6c2bc);
+  static const surfaceContainerLowest = Color(0xFF0f0d0a);
+  static const surfaceContainerLow = Color(0xFF1d1b19); // AppColors.onSurface
+  static const surfaceContainer = Color(0xFF211f1c);
+  static const surfaceContainerHigh = Color(0xFF2b2824);
+  static const surfaceContainerHighest = Color(0xFF363330);
+  static const surfaceDim = Color(0xFF15130f);
+  static const surfaceBright = Color(0xFF3c3835);
+  static const outline = Color(0xFFa08c86);
+  static const error = Color(0xFFffb4ab);
+  static const onError = Color(0xFF690005);
+  static const errorContainer = Color(0xFF93000a);
+  static const onErrorContainer = Color(0xFFffdad6);
 }
 
 const editorialShadow = BoxShadow(
@@ -50,38 +86,72 @@ const editorialShadow = BoxShadow(
   offset: Offset(0, 8),
 );
 
-ThemeData buildAppTheme() {
-  final colorScheme = const ColorScheme(
-    brightness: Brightness.light,
-    primary: AppColors.primary,
-    onPrimary: AppColors.onPrimary,
-    primaryContainer: AppColors.primaryContainer,
-    onPrimaryContainer: AppColors.onPrimaryContainer,
-    secondary: AppColors.secondary,
-    onSecondary: AppColors.onSecondary,
-    secondaryContainer: AppColors.secondaryContainer,
-    onSecondaryContainer: AppColors.onSecondaryContainer,
-    tertiary: AppColors.tertiary,
-    onTertiary: AppColors.onTertiary,
-    tertiaryContainer: AppColors.tertiaryContainer,
-    onTertiaryContainer: AppColors.onTertiary,
-    surface: AppColors.surface,
-    onSurface: AppColors.onSurface,
-    onSurfaceVariant: AppColors.onSurfaceVariant,
-    outline: AppColors.outline,
-    error: AppColors.error,
-    onError: AppColors.onError,
-    errorContainer: AppColors.errorContainer,
-    onErrorContainer: AppColors.onErrorContainer,
-    surfaceContainerLowest: AppColors.surfaceContainerLowest,
-    surfaceContainerLow: AppColors.surfaceContainerLow,
-    surfaceContainer: AppColors.surfaceContainer,
-    surfaceContainerHigh: AppColors.surfaceContainerHigh,
-    surfaceContainerHighest: AppColors.surfaceContainerHighest,
-    surfaceDim: AppColors.surfaceDim,
-    surfaceBright: AppColors.surfaceBright,
-    surfaceTint: AppColors.surfaceTint,
-  );
+ThemeData buildAppTheme([Brightness brightness = Brightness.light]) {
+  final isDark = brightness == Brightness.dark;
+
+  final colorScheme = isDark
+      ? const ColorScheme(
+          brightness: Brightness.dark,
+          primary: _AppDarkColors.primary,
+          onPrimary: _AppDarkColors.onPrimary,
+          primaryContainer: _AppDarkColors.primaryContainer,
+          onPrimaryContainer: _AppDarkColors.onPrimaryContainer,
+          secondary: _AppDarkColors.secondary,
+          onSecondary: _AppDarkColors.onSecondary,
+          secondaryContainer: _AppDarkColors.secondaryContainer,
+          onSecondaryContainer: _AppDarkColors.onSecondaryContainer,
+          tertiary: _AppDarkColors.tertiary,
+          onTertiary: _AppDarkColors.onTertiary,
+          tertiaryContainer: _AppDarkColors.tertiaryContainer,
+          onTertiaryContainer: _AppDarkColors.onTertiaryContainer,
+          surface: _AppDarkColors.surface,
+          onSurface: _AppDarkColors.onSurface,
+          onSurfaceVariant: _AppDarkColors.onSurfaceVariant,
+          outline: _AppDarkColors.outline,
+          error: _AppDarkColors.error,
+          onError: _AppDarkColors.onError,
+          errorContainer: _AppDarkColors.errorContainer,
+          onErrorContainer: _AppDarkColors.onErrorContainer,
+          surfaceContainerLowest: _AppDarkColors.surfaceContainerLowest,
+          surfaceContainerLow: _AppDarkColors.surfaceContainerLow,
+          surfaceContainer: _AppDarkColors.surfaceContainer,
+          surfaceContainerHigh: _AppDarkColors.surfaceContainerHigh,
+          surfaceContainerHighest: _AppDarkColors.surfaceContainerHighest,
+          surfaceDim: _AppDarkColors.surfaceDim,
+          surfaceBright: _AppDarkColors.surfaceBright,
+          surfaceTint: _AppDarkColors.primary,
+        )
+      : const ColorScheme(
+          brightness: Brightness.light,
+          primary: AppColors.primary,
+          onPrimary: AppColors.onPrimary,
+          primaryContainer: AppColors.primaryContainer,
+          onPrimaryContainer: AppColors.onPrimaryContainer,
+          secondary: AppColors.secondary,
+          onSecondary: AppColors.onSecondary,
+          secondaryContainer: AppColors.secondaryContainer,
+          onSecondaryContainer: AppColors.onSecondaryContainer,
+          tertiary: AppColors.tertiary,
+          onTertiary: AppColors.onTertiary,
+          tertiaryContainer: AppColors.tertiaryContainer,
+          onTertiaryContainer: AppColors.onTertiary,
+          surface: AppColors.surface,
+          onSurface: AppColors.onSurface,
+          onSurfaceVariant: AppColors.onSurfaceVariant,
+          outline: AppColors.outline,
+          error: AppColors.error,
+          onError: AppColors.onError,
+          errorContainer: AppColors.errorContainer,
+          onErrorContainer: AppColors.onErrorContainer,
+          surfaceContainerLowest: AppColors.surfaceContainerLowest,
+          surfaceContainerLow: AppColors.surfaceContainerLow,
+          surfaceContainer: AppColors.surfaceContainer,
+          surfaceContainerHigh: AppColors.surfaceContainerHigh,
+          surfaceContainerHighest: AppColors.surfaceContainerHighest,
+          surfaceDim: AppColors.surfaceDim,
+          surfaceBright: AppColors.surfaceBright,
+          surfaceTint: AppColors.surfaceTint,
+        );
 
   final textTheme = GoogleFonts.dmSansTextTheme().copyWith(
     displayLarge: GoogleFonts.playfairDisplay(
@@ -148,43 +218,48 @@ ThemeData buildAppTheme() {
       fontWeight: FontWeight.w500,
       letterSpacing: 0.05 * 11,
     ),
+  ).apply(
+    bodyColor: colorScheme.onSurface,
+    displayColor: colorScheme.onSurface,
   );
 
   return ThemeData(
     useMaterial3: true,
+    brightness: brightness,
     colorScheme: colorScheme,
     textTheme: textTheme,
-    scaffoldBackgroundColor: AppColors.background,
+    scaffoldBackgroundColor: colorScheme.surface,
     appBarTheme: AppBarTheme(
-      backgroundColor: AppColors.background,
-      foregroundColor: AppColors.onSurface,
+      backgroundColor: colorScheme.surface,
+      foregroundColor: colorScheme.onSurface,
       elevation: 0,
       scrolledUnderElevation: 0,
       titleTextStyle: textTheme.headlineMedium,
     ),
-    cardTheme: const CardThemeData(
-      color: AppColors.surfaceContainerLowest,
+    cardTheme: CardThemeData(
+      color: colorScheme.surfaceContainerLowest,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
+        side: isDark ? BorderSide(color: colorScheme.outline.withValues(alpha: 0.15)) : BorderSide.none,
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: AppColors.surfaceContainerLow,
+      fillColor: colorScheme.surfaceContainerLow,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: AppColors.primary),
+        borderSide: BorderSide(color: colorScheme.primary),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.onPrimary,
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
         minimumSize: const Size.fromHeight(52),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
@@ -192,8 +267,8 @@ ThemeData buildAppTheme() {
       ),
     ),
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: AppColors.surfaceContainerLowest,
-      indicatorColor: AppColors.secondaryContainer.withValues(alpha: 0.5),
+      backgroundColor: colorScheme.surfaceContainerLowest,
+      indicatorColor: colorScheme.secondaryContainer.withValues(alpha: 0.5),
       labelTextStyle: WidgetStatePropertyAll(
         textTheme.labelMedium?.copyWith(letterSpacing: 0),
       ),

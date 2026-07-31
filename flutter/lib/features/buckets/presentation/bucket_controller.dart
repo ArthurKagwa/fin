@@ -36,6 +36,19 @@ class BucketController extends _$BucketController {
     );
   }
 
+  Future<bool> hasReferences(String id) =>
+      ref.read(bucketRepositoryProvider).hasReferences(id);
+
+  Future<void> archive(String id) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => ref.read(bucketRepositoryProvider).archiveBucket(id));
+  }
+
+  Future<void> unarchive(String id) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => ref.read(bucketRepositoryProvider).unarchiveBucket(id));
+  }
+
   Future<void> delete(String id) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() => ref.read(bucketRepositoryProvider).deleteBucket(id));

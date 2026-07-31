@@ -41,7 +41,7 @@ final class ExpenseControllerProvider
   }
 }
 
-String _$expenseControllerHash() => r'8896c64a6d09d41375e2ad806ce66594805c0a00';
+String _$expenseControllerHash() => r'bd69bb0679f300acb54aaffe0f6aa6a99e9dd339';
 
 abstract class _$ExpenseController extends $Notifier<AsyncValue<void>> {
   AsyncValue<void> build();

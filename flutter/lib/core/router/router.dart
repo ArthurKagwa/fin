@@ -1,3 +1,5 @@
+import 'package:fintrack/core/app_lock/app_lock_controller.dart';
+import 'package:fintrack/core/app_lock/lock_screen.dart';
 import 'package:fintrack/core/widgets/scaffold_with_nav.dart';
 import 'package:fintrack/features/auth/data/auth_repository.dart';
 import 'package:fintrack/features/auth/presentation/sign_in_screen.dart';
@@ -8,6 +10,7 @@ import 'package:fintrack/features/buckets/presentation/buckets_screen.dart';
 import 'package:fintrack/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:fintrack/features/earnings/presentation/earnings_screen.dart';
 import 'package:fintrack/features/expenses/presentation/transactions_screen.dart';
+import 'package:fintrack/features/imports/presentation/import_screen.dart';
 import 'package:fintrack/features/income/presentation/income_list_screen.dart';
 import 'package:fintrack/features/onboarding/presentation/currency_setup_screen.dart';
 import 'package:fintrack/features/planning/presentation/plan_editor_screen.dart';
@@ -18,6 +21,7 @@ import 'package:fintrack/features/recurring/presentation/recurring_form_screen.d
 import 'package:fintrack/features/recurring/presentation/recurring_screen.dart';
 import 'package:fintrack/features/reports/presentation/export_screen.dart';
 import 'package:fintrack/features/settings/presentation/settings_screen.dart';
+import 'package:fintrack/features/trends/presentation/trends_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -27,6 +31,7 @@ part 'router.g.dart';
 GoRouter router(Ref ref) {
   final authState = ref.watch(authStateProvider);
   final profileState = ref.watch(userProfileProvider);
+  final lockState = ref.watch(appLockControllerProvider);
 
   return GoRouter(
     initialLocation: '/',
@@ -35,9 +40,11 @@ GoRouter router(Ref ref) {
       final isSignedIn = user != null;
       final isVerified = user?.emailVerified ?? false;
       final hasCurrency = profileState.asData?.value != null;
+      final isLocked = lockState.asData?.value.shouldBlock ?? false;
       final isOnSignIn = state.matchedLocation == '/sign-in';
       final isOnVerifyEmail = state.matchedLocation == '/verify-email';
       final isOnCurrencySetup = state.matchedLocation == '/onboarding/currency';
+      final isOnLock = state.matchedLocation == '/lock';
 
       if (!isSignedIn) {
         return isOnSignIn ? null : '/sign-in';
@@ -45,6 +52,12 @@ GoRouter router(Ref ref) {
       if (!isVerified) {
         return isOnVerifyEmail ? null : '/verify-email';
       }
+      // Before onboarding, not after: someone resuming mid-setup should
+      // still have to unlock first.
+      if (isLocked) {
+        return isOnLock ? null : '/lock';
+      }
+      if (isOnLock) return '/';
       if (!hasCurrency) {
         return isOnCurrencySetup ? null : '/onboarding/currency';
       }
@@ -63,6 +76,10 @@ GoRouter router(Ref ref) {
       GoRoute(
         path: '/onboarding/currency',
         builder: (context, state) => const CurrencySetupScreen(),
+      ),
+      GoRoute(
+        path: '/lock',
+        builder: (context, state) => const LockScreen(),
       ),
       GoRoute(
         path: '/buckets',
@@ -107,8 +124,21 @@ GoRouter router(Ref ref) {
         builder: (context, state) => const TransactionsScreen(),
       ),
       GoRoute(
+        path: '/import',
+        builder: (context, state) => const ImportScreen(),
+      ),
+      GoRoute(
+        path: '/trends',
+        builder: (context, state) => const TrendsScreen(),
+      ),
+      GoRoute(
         path: '/recurring/new',
         builder: (context, state) => const RecurringFormScreen(),
+      ),
+      GoRoute(
+        path: '/recurring/:id/edit',
+        builder: (context, state) =>
+            RecurringFormScreen(paymentId: state.pathParameters['id']),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) =>

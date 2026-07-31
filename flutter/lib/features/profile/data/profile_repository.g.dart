@@ -135,3 +135,43 @@ final class CurrencyCodeProvider
 }
 
 String _$currencyCodeHash() => r'bf1dd44ab9924b273038d81787a5457b845836b7';
+
+@ProviderFor(unallocatedMinor)
+final unallocatedMinorProvider = UnallocatedMinorProvider._();
+
+final class UnallocatedMinorProvider extends $FunctionalProvider<int, int, int>
+    with $Provider<int> {
+  UnallocatedMinorProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'unallocatedMinorProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$unallocatedMinorHash();
+
+  @$internal
+  @override
+  $ProviderElement<int> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  int create(Ref ref) {
+    return unallocatedMinor(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(int value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<int>(value),
+    );
+  }
+}
+
+String _$unallocatedMinorHash() => r'2f9de939b0a739bae4371f868d18fd1df3556f40';

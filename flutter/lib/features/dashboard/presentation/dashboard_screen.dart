@@ -110,9 +110,15 @@ class _DashboardBody extends ConsumerWidget {
     final bucketsInUserOrder = [...report.buckets]
       ..sort((a, b) => a.bucket.sortOrder.compareTo(b.bucket.sortOrder));
 
+    final unallocated = ref.watch(unallocatedMinorProvider);
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
       children: [
+        if (unallocated > 0) ...[
+          _UnallocatedBanner(amountMinor: unallocated),
+          const SizedBox(height: 20),
+        ],
         _PlanVsActualCard(report: report),
         const SizedBox(height: 24),
         Text('Buckets', style: Theme.of(context).textTheme.titleLarge),
@@ -181,6 +187,40 @@ class _DashboardBody extends ConsumerWidget {
       if (b.bucket.id == bucketId) return b.bucket.name;
     }
     return 'Unknown bucket';
+  }
+}
+
+class _UnallocatedBanner extends ConsumerWidget {
+  const _UnallocatedBanner({required this.amountMinor});
+
+  final int amountMinor;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final currency = ref.watch(currencyCodeProvider);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.go('/money-in'),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(Icons.savings_outlined, color: colorScheme.secondary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '${formatMoney(amountMinor, currency: currency)} not yet given a job — allocate it',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+              Icon(Icons.chevron_right, color: colorScheme.secondary),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -326,12 +366,19 @@ class _BucketCard extends ConsumerWidget {
                   children: [
                     Icon(Icons.flag_outlined, size: 16, color: colorScheme.secondary),
                     const SizedBox(width: 6),
-                    // Progress towards a goal needs carried-over balances, which
-                    // arrive with allocation (FR-08). Showing a hardcoded 0% on
-                    // every goal forever was worse than showing none.
                     Text(
                       'Goal: ${formatMoney(goalMinor, currency: currency)}',
                       style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                    const Spacer(),
+                    // balanceMinor is the running envelope balance — it never
+                    // resets between months, so it doubles as goal progress
+                    // with no separate carry-over figure to compute.
+                    Text(
+                      '${(bucketLine.bucket.balanceMinor / goalMinor * 100).clamp(0, 100).round()}%',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: colorScheme.secondary,
+                          ),
                     ),
                   ],
                 ),

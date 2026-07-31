@@ -1,4 +1,5 @@
 import 'package:fintrack/core/utils/money.dart';
+import 'package:fintrack/features/buckets/application/bucket.dart';
 import 'package:fintrack/features/buckets/data/bucket_repository.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
 import 'package:flutter/material.dart';
@@ -57,37 +58,105 @@ class BucketsScreen extends ConsumerWidget {
               ),
             );
           }
-          return ListView.separated(
+          final archivedAsync = ref.watch(archivedBucketsProvider);
+          return ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-            itemCount: buckets.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final bucket = buckets[index];
-              return Card(
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: () => context.push('/buckets/${bucket.id}'),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    leading: CircleAvatar(
-                      backgroundColor: colorScheme.primaryFixed,
-                      foregroundColor: colorScheme.primary,
-                      child: Text(bucket.name.substring(0, 1)),
-                    ),
-                    title: Text(bucket.name, style: Theme.of(context).textTheme.titleMedium),
-                    subtitle: Text(
-                      bucket.goalMinor != null
-                          ? 'Planned ${formatMoney(bucket.plannedMinor ?? 0, currency: currency)} · Goal ${formatMoney(bucket.goalMinor!, currency: currency)}'
-                          : 'Planned ${formatMoney(bucket.plannedMinor ?? 0, currency: currency)}',
-                    ),
-                    trailing: Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
-                  ),
-                ),
-              );
-            },
+            children: [
+              for (final bucket in buckets) ...[
+                _BucketTile(bucket: bucket, currency: currency, colorScheme: colorScheme),
+                const SizedBox(height: 12),
+              ],
+              archivedAsync.when(
+                loading: () => const SizedBox.shrink(),
+                error: (_, _) => const SizedBox.shrink(),
+                data: (archived) {
+                  if (archived.isEmpty) return const SizedBox.shrink();
+                  return _ArchivedSection(
+                    archived: archived,
+                    currency: currency,
+                    colorScheme: colorScheme,
+                  );
+                },
+              ),
+            ],
           );
         },
       ),
+    );
+  }
+}
+
+class _BucketTile extends StatelessWidget {
+  const _BucketTile({required this.bucket, required this.currency, required this.colorScheme});
+
+  final Bucket bucket;
+  final String currency;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.push('/buckets/${bucket.id}'),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          leading: CircleAvatar(
+            backgroundColor: colorScheme.primaryFixed,
+            foregroundColor: colorScheme.primary,
+            child: Text(bucket.name.substring(0, 1)),
+          ),
+          title: Text(bucket.name, style: Theme.of(context).textTheme.titleMedium),
+          subtitle: Text(
+            bucket.goalMinor != null
+                ? 'Planned ${formatMoney(bucket.plannedMinor ?? 0, currency: currency)} · Goal ${formatMoney(bucket.goalMinor!, currency: currency)}'
+                : 'Planned ${formatMoney(bucket.plannedMinor ?? 0, currency: currency)}',
+          ),
+          trailing: Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArchivedSection extends StatefulWidget {
+  const _ArchivedSection({required this.archived, required this.currency, required this.colorScheme});
+
+  final List<Bucket> archived;
+  final String currency;
+  final ColorScheme colorScheme;
+
+  @override
+  State<_ArchivedSection> createState() => _ArchivedSectionState();
+}
+
+class _ArchivedSectionState extends State<_ArchivedSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        TextButton.icon(
+          onPressed: () => setState(() => _expanded = !_expanded),
+          icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more),
+          label: Text('Archived (${widget.archived.length})'),
+        ),
+        if (_expanded)
+          for (final bucket in widget.archived) ...[
+            Opacity(
+              opacity: 0.6,
+              child: _BucketTile(
+                bucket: bucket,
+                currency: widget.currency,
+                colorScheme: widget.colorScheme,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+      ],
     );
   }
 }

@@ -24,6 +24,7 @@ class IncomeEvent {
     this.grossMinor,
     this.note,
     this.deductions = const [],
+    this.deletedAt,
   });
 
   final String id;
@@ -34,8 +35,11 @@ class IncomeEvent {
   final int? grossMinor;
   final String? note;
   final List<Deduction> deductions;
+  final DateTime? deletedAt;
 
   bool get isPaycheque => kind == IncomeKind.paycheque;
+
+  bool get isDeleted => deletedAt != null;
 
   int get deductionsTotalMinor =>
       deductions.fold(0, (sum, d) => sum + d.amountMinor);

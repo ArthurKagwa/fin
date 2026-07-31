@@ -28,3 +28,16 @@ final class NotFoundFailure extends AppFailure {
 final class ExportFailure extends AppFailure {
   const ExportFailure(super.message);
 }
+
+/// A write was rejected because it would violate an invariant checked inside
+/// a transaction — e.g. allocating more than is currently unallocated.
+final class ConflictFailure extends AppFailure {
+  const ConflictFailure(super.message);
+}
+
+/// Firebase Auth requires a recent sign-in for this action (account
+/// deletion) and the current session is too old. The caller should prompt
+/// re-authentication and retry, not just show this as a dead-end error.
+final class ReauthRequiredFailure extends AppFailure {
+  const ReauthRequiredFailure(super.message);
+}

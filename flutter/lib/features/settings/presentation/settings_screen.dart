@@ -1,5 +1,8 @@
+import 'package:fintrack/core/app_lock/app_lock_controller.dart';
+import 'package:fintrack/core/notifications/reminder_controller.dart';
 import 'package:fintrack/features/auth/data/auth_repository.dart';
 import 'package:fintrack/features/planning/presentation/plan_controller.dart';
+import 'package:fintrack/features/profile/application/user_profile.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +16,9 @@ class SettingsScreen extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final email = ref.watch(authStateProvider).asData?.value?.email ?? '';
     final currency = ref.watch(currencyCodeProvider);
+    final profile = ref.watch(userProfileProvider).asData?.value;
+    final appLockEnabled =
+        ref.watch(appLockControllerProvider).asData?.value.enabled ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -58,16 +64,22 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () => context.push('/earnings'),
               ),
               _SettingsRow(
+                icon: Icons.show_chart,
+                title: 'Spending trend',
+                subtitle: 'Total spend over the last 6 months',
+                onTap: () => context.push('/trends'),
+              ),
+              _SettingsRow(
                 icon: Icons.picture_as_pdf_outlined,
                 title: 'Export',
                 subtitle: 'Share a month as a PDF statement',
                 onTap: () => context.push('/export'),
               ),
-              const _SettingsRow(
+              _SettingsRow(
                 icon: Icons.upload_file_outlined,
                 title: 'Import',
                 subtitle: 'Bring in a CSV of past transactions',
-                enabled: false,
+                onTap: () => context.push('/import'),
               ),
             ],
           ),
@@ -81,11 +93,21 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: email.isEmpty ? currency : '$email · $currency',
                 onTap: () => context.push('/account'),
               ),
-              const _SettingsRow(
+              _SettingsRow(
+                icon: appLockEnabled ? Icons.lock_outline : Icons.lock_open_outlined,
+                title: 'App lock',
+                subtitle: appLockEnabled
+                    ? 'On — unlocks with your screen lock'
+                    : 'Off',
+                onTap: () => _showAppLockDialog(context, ref, appLockEnabled),
+              ),
+              _SettingsRow(
                 icon: Icons.notifications_outlined,
                 title: 'Evening reminder',
-                subtitle: 'Set a time to log the day',
-                enabled: false,
+                subtitle: profile?.hasReminder ?? false
+                    ? 'Reminds you at ${_formatTimeOfDay(profile!.reminderHour!, profile.reminderMinute!)}'
+                    : 'Set a time to log the day',
+                onTap: () => _showReminderDialog(context, ref, profile),
               ),
               const _SettingsRow(
                 icon: Icons.workspace_premium_outlined,
@@ -110,6 +132,108 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+String _formatTimeOfDay(int hour, int minute) {
+  final period = hour < 12 ? 'AM' : 'PM';
+  final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+  return '$displayHour:${minute.toString().padLeft(2, '0')} $period';
+}
+
+Future<void> _showAppLockDialog(
+  BuildContext context,
+  WidgetRef ref,
+  bool enabled,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(enabled ? 'Turn off app lock?' : 'Turn on app lock?'),
+      content: Text(
+        enabled
+            ? 'FinTrack will open without asking for your fingerprint, face or '
+                'screen-lock PIN.'
+            : 'FinTrack will ask for your fingerprint, face or screen-lock PIN '
+                'each time you open it. It uses the lock your phone already '
+                'has — there is no separate FinTrack PIN to remember.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: Text(enabled ? 'Turn off' : 'Turn on'),
+        ),
+      ],
+    ),
+  );
+  if (!(confirmed ?? false) || !context.mounted) return;
+
+  final controller = ref.read(appLockControllerProvider.notifier);
+  final messenger = ScaffoldMessenger.of(context);
+  // Both paths prompt for the device credential before taking effect —
+  // turning protection off needs the same proof as using it. A failed or
+  // cancelled prompt is a no-op, not an error, so only a genuinely
+  // unsupported device says anything.
+  try {
+    if (enabled) {
+      await controller.disable();
+    } else {
+      await controller.enable();
+    }
+  } on AppLockUnsupported catch (error) {
+    messenger.showSnackBar(SnackBar(content: Text('$error')));
+  }
+}
+
+Future<void> _showReminderDialog(
+  BuildContext context,
+  WidgetRef ref,
+  UserProfile? profile,
+) async {
+  if (profile?.hasReminder ?? false) {
+    final action = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Evening reminder'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop('change'),
+            child: const Text('Change time'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogContext).pop('off'),
+            child: const Text('Turn off'),
+          ),
+        ],
+      ),
+    );
+    if (action == 'off') {
+      await ref.read(reminderControllerProvider.notifier).clearReminder();
+      return;
+    }
+    if (action != 'change') return;
+  }
+
+  if (!context.mounted) return;
+  final initial = profile?.hasReminder ?? false
+      ? TimeOfDay(hour: profile!.reminderHour!, minute: profile.reminderMinute!)
+      : const TimeOfDay(hour: 20, minute: 0);
+
+  final picked = await showTimePicker(context: context, initialTime: initial);
+  if (picked == null || !context.mounted) return;
+
+  await ref
+      .read(reminderControllerProvider.notifier)
+      .setReminder(hour: picked.hour, minute: picked.minute);
+  if (!context.mounted) return;
+  if (ref.read(reminderControllerProvider).hasError) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${ref.read(reminderControllerProvider).error}')),
     );
   }
 }

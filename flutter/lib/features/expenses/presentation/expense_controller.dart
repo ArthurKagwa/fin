@@ -32,6 +32,27 @@ class ExpenseController extends _$ExpenseController {
     return state.hasError ? null : created;
   }
 
+  Future<void> updateExpense(
+    String id, {
+    required String bucketId,
+    required int amountMinor,
+    required DateTime occurredOn,
+    String? payee,
+    String? note,
+  }) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(expenseRepositoryProvider).updateExpense(
+            id,
+            bucketId: bucketId,
+            amountMinor: amountMinor,
+            occurredOn: occurredOn,
+            payee: payee,
+            note: note,
+          ),
+    );
+  }
+
   Future<void> deleteExpense(String id) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(

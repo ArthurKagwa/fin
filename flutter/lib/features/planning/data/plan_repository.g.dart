@@ -48,7 +48,7 @@ final class PlanRepositoryProvider
   }
 }
 
-String _$planRepositoryHash() => r'9e0a1d43b7c58f26ad91e30b7c4f6182d5a0c93b';
+String _$planRepositoryHash() => r'11d4446e9d0da9099dbeac751034f26393d8737f';
 
 @ProviderFor(monthlyPlan)
 final monthlyPlanProvider = MonthlyPlanFamily._();
@@ -105,7 +105,7 @@ final class MonthlyPlanProvider
   }
 }
 
-String _$monthlyPlanHash() => r'4b7f2c1e8a3d5906c2e14fb7038d9a5c61e4b872';
+String _$monthlyPlanHash() => r'310312cbcfebe24d9cbb671945a39b9924a3e3fa';
 
 final class MonthlyPlanFamily extends $Family
     with $FunctionalFamilyOverride<Stream<MonthlyPlan>, DateTime> {
@@ -180,7 +180,7 @@ final class PlanVsActualProvider
   }
 }
 
-String _$planVsActualHash() => r'7c3a95e2b184d670fa2c8e39b5107d4c6a82f1e5';
+String _$planVsActualHash() => r'd7d69eb4eb6938abf44067b0b7253a6281bccafa';
 
 final class PlanVsActualFamily extends $Family
     with $FunctionalFamilyOverride<Stream<PlanVsActual>, DateTime> {

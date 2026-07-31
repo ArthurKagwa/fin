@@ -8,12 +8,18 @@ part of 'plan_controller.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
+/// Which month the plan-vs-actual report is showing. Kept alive so paging back
+/// to June, opening a bucket and coming back doesn't silently jump to today.
 
 @ProviderFor(SelectedPlanMonth)
 final selectedPlanMonthProvider = SelectedPlanMonthProvider._();
 
+/// Which month the plan-vs-actual report is showing. Kept alive so paging back
+/// to June, opening a bucket and coming back doesn't silently jump to today.
 final class SelectedPlanMonthProvider
     extends $NotifierProvider<SelectedPlanMonth, DateTime> {
+  /// Which month the plan-vs-actual report is showing. Kept alive so paging back
+  /// to June, opening a bucket and coming back doesn't silently jump to today.
   SelectedPlanMonthProvider._()
     : super(
         from: null,
@@ -41,7 +47,10 @@ final class SelectedPlanMonthProvider
   }
 }
 
-String _$selectedPlanMonthHash() => r'2d8f61b04a9c7e35128b6dfa03c95e78b41d602a';
+String _$selectedPlanMonthHash() => r'2ac20a7a3560501633c9b3a971b08bbe56858366';
+
+/// Which month the plan-vs-actual report is showing. Kept alive so paging back
+/// to June, opening a bucket and coming back doesn't silently jump to today.
 
 abstract class _$SelectedPlanMonth extends $Notifier<DateTime> {
   DateTime build();
@@ -93,7 +102,7 @@ final class PlanControllerProvider
   }
 }
 
-String _$planControllerHash() => r'8a15c3d967be204f7c3a81e5602db94f17c3ae60';
+String _$planControllerHash() => r'b41ae60448418729a42ff41cd133431827e00e6a';
 
 abstract class _$PlanController extends $Notifier<AsyncValue<void>> {
   AsyncValue<void> build();

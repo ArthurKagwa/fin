@@ -21,6 +21,30 @@ abstract class RecurringRepository {
   });
   Future<void> confirmOccurrence(String occurrenceId);
   Future<void> skipOccurrence(String occurrenceId);
+
+  /// Renames the payment or moves future occurrences to a different bucket.
+  /// Doesn't touch rate-period history or dates.
+  Future<void> updateDetails(String id, {required String name, required String bucketId});
+
+  /// Records an amount change effective from a date — the missing write path
+  /// for the rate-period history the model already supports.
+  Future<void> addRatePeriod(String id, {required int amountMinor, required DateTime effectiveFrom});
+
+  /// Sets or clears the end date. This is the primary "stop this payment"
+  /// action — occurrences are generated on the fly from `startOn`/`endOn`, so
+  /// setting `endOn` to now (or to a past date) is enough to stop generating
+  /// future ones; past confirmed occurrences are separate expense docs and
+  /// are unaffected.
+  Future<void> setEndDate(String id, DateTime? endOn);
+
+  /// True if any expense was ever created from an occurrence of this payment
+  /// (via [confirmOccurrence]) — existence check, not a count.
+  Future<bool> hasLinkedExpenses(String id);
+
+  /// True hard delete. Callers should only invoke this when
+  /// [hasLinkedExpenses] returned false; otherwise [setEndDate] is the safe
+  /// "stop it" action that preserves history.
+  Future<void> deleteRecurringPayment(String id);
 }
 
 const _lookback = Duration(days: 30);
@@ -40,6 +64,9 @@ class FirestoreRecurringRepository implements RecurringRepository {
 
   CollectionReference<Map<String, dynamic>> get _expenses =>
       _firestore.collection('users').doc(_uid).collection('expenses');
+
+  DocumentReference<Map<String, dynamic>> _bucketDoc(String bucketId) =>
+      _firestore.collection('users').doc(_uid).collection('buckets').doc(bucketId);
 
   @override
   Stream<List<RecurringPayment>> watchRecurringPayments() {
@@ -65,7 +92,7 @@ class FirestoreRecurringRepository implements RecurringRepository {
         final occurrences = <Occurrence>[];
         for (final doc in paymentsSnapshot.docs) {
           final payment = _paymentFromDoc(doc);
-          for (final dueOn in _occurrenceDates(payment, windowStart, windowEnd)) {
+          for (final dueOn in occurrenceDates(payment, windowStart, windowEnd)) {
             final id = _occurrenceId(payment.id, dueOn);
             if (resolvedIds.contains(id)) continue;
             occurrences.add(
@@ -73,7 +100,7 @@ class FirestoreRecurringRepository implements RecurringRepository {
                 id: id,
                 recurringPaymentId: payment.id,
                 dueOn: dueOn,
-                expectedMinor: _amountAt(payment, dueOn),
+                expectedMinor: amountAt(payment, dueOn),
                 status: OccurrenceStatus.pending,
               ),
             );
@@ -118,7 +145,7 @@ class FirestoreRecurringRepository implements RecurringRepository {
     final (paymentId, dueOn) = _parseOccurrenceId(occurrenceId);
     final paymentDoc = await _payments.doc(paymentId).get();
     final payment = _paymentFromDoc(paymentDoc);
-    final amountMinor = _amountAt(payment, dueOn);
+    final amountMinor = amountAt(payment, dueOn);
 
     final batch = _firestore.batch();
     batch.set(_occurrenceStatuses.doc(occurrenceId), {
@@ -135,6 +162,11 @@ class FirestoreRecurringRepository implements RecurringRepository {
       'occurrenceId': occurrenceId,
       'deletedAt': null,
     });
+    // Same accounting as ExpenseRepository.addExpense — this is the one path
+    // that creates an expense without going through it.
+    batch.update(_bucketDoc(payment.bucketId), {
+      'balanceMinor': FieldValue.increment(-amountMinor),
+    });
     await batch.commit();
   }
 
@@ -148,44 +180,53 @@ class FirestoreRecurringRepository implements RecurringRepository {
     });
   }
 
+  @override
+  Future<void> updateDetails(String id, {required String name, required String bucketId}) =>
+      _payments.doc(id).update({'name': name, 'bucketId': bucketId});
+
+  @override
+  Future<void> addRatePeriod(
+    String id, {
+    required int amountMinor,
+    required DateTime effectiveFrom,
+  }) async {
+    final ratePeriodId = _payments.doc().id;
+    await _payments.doc(id).update({
+      'ratePeriods': FieldValue.arrayUnion([
+        {
+          'id': ratePeriodId,
+          'amountMinor': amountMinor,
+          'effectiveFrom': Timestamp.fromDate(effectiveFrom),
+        },
+      ]),
+    });
+  }
+
+  @override
+  Future<void> setEndDate(String id, DateTime? endOn) => _payments
+      .doc(id)
+      .update({'endOn': endOn == null ? null : Timestamp.fromDate(endOn)});
+
+  @override
+  Future<bool> hasLinkedExpenses(String id) async {
+    final prefix = '$id::';
+    final snapshot = await _expenses
+        .where('occurrenceId', isGreaterThanOrEqualTo: prefix)
+        .where('occurrenceId', isLessThan: '$prefix')
+        .limit(1)
+        .get();
+    return snapshot.docs.isNotEmpty;
+  }
+
+  @override
+  Future<void> deleteRecurringPayment(String id) => _payments.doc(id).delete();
+
   String _occurrenceId(String paymentId, DateTime dueOn) =>
       '$paymentId::${dueOn.millisecondsSinceEpoch}';
 
   (String, DateTime) _parseOccurrenceId(String occurrenceId) {
     final parts = occurrenceId.split('::');
     return (parts[0], DateTime.fromMillisecondsSinceEpoch(int.parse(parts[1])));
-  }
-
-  int _amountAt(RecurringPayment payment, DateTime date) {
-    final active = payment.ratePeriods.where((r) => !r.effectiveFrom.isAfter(date)).toList()
-      ..sort((a, b) => b.effectiveFrom.compareTo(a.effectiveFrom));
-    return active.isEmpty ? 0 : active.first.amountMinor;
-  }
-
-  List<DateTime> _occurrenceDates(RecurringPayment payment, DateTime windowStart, DateTime windowEnd) {
-    final dates = <DateTime>[];
-    var cursor = payment.startOn;
-    final effectiveEnd = payment.endOn != null && payment.endOn!.isBefore(windowEnd)
-        ? payment.endOn!
-        : windowEnd;
-
-    while (!cursor.isAfter(effectiveEnd)) {
-      if (!cursor.isBefore(windowStart)) dates.add(cursor);
-      cursor = _step(payment, cursor);
-    }
-    return dates;
-  }
-
-  DateTime _step(RecurringPayment payment, DateTime from) {
-    return switch (payment.frequency) {
-      RecurringFrequency.daily => from.add(const Duration(days: 1)),
-      RecurringFrequency.weekly => from.add(const Duration(days: 7)),
-      RecurringFrequency.biweekly => from.add(const Duration(days: 14)),
-      RecurringFrequency.monthly => DateTime(from.year, from.month + 1, from.day),
-      RecurringFrequency.yearly => DateTime(from.year + 1, from.month, from.day),
-      RecurringFrequency.custom =>
-        from.add(Duration(days: payment.intervalDays ?? 30)),
-    };
   }
 
   RecurringPayment _paymentFromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {

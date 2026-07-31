@@ -14,7 +14,10 @@ class BucketDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final bucketsAsync = ref.watch(activeBucketsProvider);
+    // All buckets, not just active ones — an archived bucket must stay
+    // reachable here (to view it or to unarchive it) rather than vanishing
+    // the moment it's archived.
+    final bucketsAsync = ref.watch(allBucketsProvider);
     final currency = ref.watch(currencyCodeProvider);
 
     return Scaffold(
@@ -53,7 +56,27 @@ class _BucketDetailBody extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       children: [
-        Text(bucket.name, style: Theme.of(context).textTheme.headlineSmall),
+        Row(
+          children: [
+            Expanded(
+              child: Text(bucket.name, style: Theme.of(context).textTheme.headlineSmall),
+            ),
+            if (bucket.isArchived)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Archived',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
+          ],
+        ),
         const SizedBox(height: 20),
         Card(
           child: Padding(
@@ -61,6 +84,11 @@ class _BucketDetailBody extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _DetailRow(
+                  label: 'Balance',
+                  value: formatMoney(bucket.balanceMinor, currency: currency),
+                ),
+                const SizedBox(height: 12),
                 _DetailRow(
                   label: 'Planned amount',
                   value: formatMoney(bucket.plannedMinor ?? 0, currency: currency),
@@ -77,31 +105,74 @@ class _BucketDetailBody extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 24),
-        FilledButton.icon(
-          onPressed: () => context.push('/buckets/${bucket.id}/edit'),
-          icon: const Icon(Icons.edit_outlined),
-          label: const Text('Edit'),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(foregroundColor: colorScheme.error),
-          onPressed: () => _confirmDelete(context, ref),
-          icon: const Icon(Icons.delete_outline),
-          label: const Text('Delete bucket'),
-        ),
+        if (bucket.isArchived) ...[
+          FilledButton.icon(
+            onPressed: () => ref.read(bucketControllerProvider.notifier).unarchive(bucket.id),
+            icon: const Icon(Icons.unarchive_outlined),
+            label: const Text('Unarchive'),
+          ),
+        ] else ...[
+          FilledButton.icon(
+            onPressed: () => context.push('/buckets/${bucket.id}/edit'),
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Edit'),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(foregroundColor: colorScheme.error),
+            onPressed: () => _handleDeleteTap(context, ref),
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Delete'),
+          ),
+        ],
       ],
     );
   }
 
-  void _confirmDelete(BuildContext context, WidgetRef ref) {
+  Future<void> _handleDeleteTap(BuildContext context, WidgetRef ref) async {
+    final hasRefs = await ref.read(bucketControllerProvider.notifier).hasReferences(bucket.id);
+    if (!context.mounted) return;
+    if (hasRefs) {
+      _confirmArchive(context, ref);
+    } else {
+      _confirmHardDelete(context, ref);
+    }
+  }
+
+  void _confirmArchive(BuildContext context, WidgetRef ref) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Archive bucket?'),
+        content: Text(
+          '"${bucket.name}" has expenses or recurring payments logged against it, '
+          'so it can\'t be deleted outright without losing that history. '
+          'Archiving hides it from new entries — you can unarchive it later.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              await ref.read(bucketControllerProvider.notifier).archive(bucket.id);
+              if (context.mounted) context.pop();
+            },
+            child: const Text('Archive'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmHardDelete(BuildContext context, WidgetRef ref) {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete bucket?'),
-        content: Text(
-          'This removes "${bucket.name}". Expenses already logged against it are kept but will '
-          'no longer be tracked in this bucket.',
-        ),
+        content: Text('This removes "${bucket.name}" completely. It has no history yet, so nothing else is affected.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),

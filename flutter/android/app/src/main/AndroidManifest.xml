@@ -1,4 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required on Android 13+ to show any notification, including the
+         evening reminder — without it, scheduling succeeds but nothing
+         ever appears. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- App lock. Covers fingerprint/face; the device-credential (PIN,
+         pattern, password) fallback local_auth also offers needs no
+         separate permission. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <application
         android:label="fintrack"
         android:name="${applicationName}"

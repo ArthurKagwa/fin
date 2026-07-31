@@ -131,8 +131,16 @@ final class ExpensesForMonthFamily extends $Family
   String toString() => r'expensesForMonthProvider';
 }
 
+/// Only ever renders the last 5 rows on the dashboard, but reads the whole
+/// history without a cap — this bounds it well above what's shown so the
+/// query cost stops growing linearly with account age.
+
 @ProviderFor(recentExpenses)
 final recentExpensesProvider = RecentExpensesProvider._();
+
+/// Only ever renders the last 5 rows on the dashboard, but reads the whole
+/// history without a cap — this bounds it well above what's shown so the
+/// query cost stops growing linearly with account age.
 
 final class RecentExpensesProvider
     extends
@@ -142,6 +150,9 @@ final class RecentExpensesProvider
           Stream<List<Expense>>
         >
     with $FutureModifier<List<Expense>>, $StreamProvider<List<Expense>> {
+  /// Only ever renders the last 5 rows on the dashboard, but reads the whole
+  /// history without a cap — this bounds it well above what's shown so the
+  /// query cost stops growing linearly with account age.
   RecentExpensesProvider._()
     : super(
         from: null,
@@ -168,4 +179,4 @@ final class RecentExpensesProvider
   }
 }
 
-String _$recentExpensesHash() => r'54ab84dbeb4dc777f807b722c83438b7805899bd';
+String _$recentExpensesHash() => r'30e9b8d42c008ba32826e6cca1ccd5edb4405566';

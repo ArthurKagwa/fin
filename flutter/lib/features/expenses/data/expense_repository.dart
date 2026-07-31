@@ -15,13 +15,22 @@ abstract class ExpenseRepository {
     String? note,
   });
 
+  Future<void> updateExpense(
+    String id, {
+    required String bucketId,
+    required int amountMinor,
+    required DateTime occurredOn,
+    String? payee,
+    String? note,
+  });
+
   Future<void> deleteExpense(String id);
 
   /// Clears the soft-delete marker. Deletes are reversible by design so the
   /// UI can offer Undo instead of a confirmation dialog on every correction.
   Future<void> restoreExpense(String id);
 
-  Stream<List<Expense>> watchExpenses({DateTime? month});
+  Stream<List<Expense>> watchExpenses({DateTime? month, int? limit});
 }
 
 class FirestoreExpenseRepository implements ExpenseRepository {
@@ -33,6 +42,9 @@ class FirestoreExpenseRepository implements ExpenseRepository {
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('users').doc(_uid).collection('expenses');
 
+  DocumentReference<Map<String, dynamic>> _bucketDoc(String bucketId) =>
+      _firestore.collection('users').doc(_uid).collection('buckets').doc(bucketId);
+
   @override
   Future<Expense> addExpense({
     required String bucketId,
@@ -41,7 +53,9 @@ class FirestoreExpenseRepository implements ExpenseRepository {
     String? payee,
     String? note,
   }) async {
-    final doc = await _collection.add({
+    final docRef = _collection.doc();
+    final batch = _firestore.batch();
+    batch.set(docRef, {
       'bucketId': bucketId,
       'amountMinor': amountMinor,
       'occurredOn': Timestamp.fromDate(occurredOn),
@@ -50,20 +64,87 @@ class FirestoreExpenseRepository implements ExpenseRepository {
       'occurrenceId': null,
       'deletedAt': null,
     });
-    final snapshot = await doc.get();
+    batch.update(_bucketDoc(bucketId), {'balanceMinor': FieldValue.increment(-amountMinor)});
+    await batch.commit();
+    final snapshot = await docRef.get();
     return _fromDoc(snapshot);
   }
 
   @override
-  Future<void> deleteExpense(String id) =>
-      _collection.doc(id).update({'deletedAt': Timestamp.now()});
+  Future<void> updateExpense(
+    String id, {
+    required String bucketId,
+    required int amountMinor,
+    required DateTime occurredOn,
+    String? payee,
+    String? note,
+  }) async {
+    final docRef = _collection.doc(id);
+    await _firestore.runTransaction((tx) async {
+      final snapshot = await tx.get(docRef);
+      final data = snapshot.data()!;
+      final oldBucketId = data['bucketId'] as String;
+      final oldAmount = (data['amountMinor'] as num).toInt();
+
+      tx.update(docRef, {
+        'bucketId': bucketId,
+        'amountMinor': amountMinor,
+        'occurredOn': Timestamp.fromDate(occurredOn),
+        'payee': payee,
+        'note': note,
+      });
+
+      if (oldBucketId == bucketId) {
+        // Same bucket: only the net difference moves.
+        tx.update(_bucketDoc(bucketId), {
+          'balanceMinor': FieldValue.increment(oldAmount - amountMinor),
+        });
+      } else {
+        // Different bucket: give the old one its money back, take the new
+        // amount from the new one.
+        tx.update(_bucketDoc(oldBucketId), {
+          'balanceMinor': FieldValue.increment(oldAmount),
+        });
+        tx.update(_bucketDoc(bucketId), {
+          'balanceMinor': FieldValue.increment(-amountMinor),
+        });
+      }
+    });
+  }
 
   @override
-  Future<void> restoreExpense(String id) =>
-      _collection.doc(id).update({'deletedAt': null});
+  Future<void> deleteExpense(String id) async {
+    final docRef = _collection.doc(id);
+    await _firestore.runTransaction((tx) async {
+      final snapshot = await tx.get(docRef);
+      final data = snapshot.data();
+      if (data == null || data['deletedAt'] != null) return;
+
+      final bucketId = data['bucketId'] as String;
+      final amountMinor = (data['amountMinor'] as num).toInt();
+      tx.update(docRef, {'deletedAt': Timestamp.now()});
+      // Money returns to the bucket it was spent from.
+      tx.update(_bucketDoc(bucketId), {'balanceMinor': FieldValue.increment(amountMinor)});
+    });
+  }
 
   @override
-  Stream<List<Expense>> watchExpenses({DateTime? month}) {
+  Future<void> restoreExpense(String id) async {
+    final docRef = _collection.doc(id);
+    await _firestore.runTransaction((tx) async {
+      final snapshot = await tx.get(docRef);
+      final data = snapshot.data();
+      if (data == null || data['deletedAt'] == null) return;
+
+      final bucketId = data['bucketId'] as String;
+      final amountMinor = (data['amountMinor'] as num).toInt();
+      tx.update(docRef, {'deletedAt': null});
+      tx.update(_bucketDoc(bucketId), {'balanceMinor': FieldValue.increment(-amountMinor)});
+    });
+  }
+
+  @override
+  Stream<List<Expense>> watchExpenses({DateTime? month, int? limit}) {
     Query<Map<String, dynamic>> query = _collection.orderBy('occurredOn', descending: true);
     if (month != null) {
       final start = DateTime(month.year, month.month);
@@ -72,6 +153,7 @@ class FirestoreExpenseRepository implements ExpenseRepository {
           .where('occurredOn', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
           .where('occurredOn', isLessThan: Timestamp.fromDate(end));
     }
+    if (limit != null) query = query.limit(limit);
     return query.snapshots().map(
           (snapshot) => snapshot.docs
               .map(_fromDoc)
@@ -106,6 +188,9 @@ ExpenseRepository expenseRepository(Ref ref) {
 Stream<List<Expense>> expensesForMonth(Ref ref, DateTime month) =>
     ref.watch(expenseRepositoryProvider).watchExpenses(month: month);
 
+/// Only ever renders the last 5 rows on the dashboard, but reads the whole
+/// history without a cap — this bounds it well above what's shown so the
+/// query cost stops growing linearly with account age.
 @Riverpod(keepAlive: true)
 Stream<List<Expense>> recentExpenses(Ref ref) =>
-    ref.watch(expenseRepositoryProvider).watchExpenses();
+    ref.watch(expenseRepositoryProvider).watchExpenses(limit: 20);

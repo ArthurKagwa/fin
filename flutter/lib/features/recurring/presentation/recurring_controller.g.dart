@@ -42,7 +42,7 @@ final class RecurringControllerProvider
 }
 
 String _$recurringControllerHash() =>
-    r'816ef26a1894700b1e1e8948269006c806fff2e7';
+    r'0136adb33572f3cff06f05680cf0e88aaf5dbd49';
 
 abstract class _$RecurringController extends $Notifier<AsyncValue<void>> {
   AsyncValue<void> build();

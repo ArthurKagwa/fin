@@ -41,7 +41,7 @@ final class IncomeControllerProvider
   }
 }
 
-String _$incomeControllerHash() => r'c1910e43d1d923b441aa45233a515f716d7117a7';
+String _$incomeControllerHash() => r'3c86d6faf0d9f9cf427c5e8d68ac529be2667ea5';
 
 abstract class _$IncomeController extends $Notifier<AsyncValue<void>> {
   AsyncValue<void> build();

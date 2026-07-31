@@ -282,6 +282,34 @@ void main() {
       expect(report.buckets.single.isUntouched, isTrue);
     });
 
+    test(
+      'an archived bucket still gets a variance line so its spend reconciles '
+      'with the grand total, instead of only inflating it',
+      () {
+        final archived = Bucket(
+          id: 'closed',
+          name: 'Closed bucket',
+          sortOrder: 0,
+          plannedMinor: 1000,
+          archivedAt: DateTime(2026, 6, 20),
+        );
+        final report = build(
+          buckets: [_bucket('open', planned: 500), archived],
+          bucketPlans: const {'open': 500, 'closed': 1000},
+          expenses: [_expense('open', 100), _expense('closed', 300)],
+        );
+
+        expect(report.spend.actualMinor, 400); // grand total sees both
+        final bucketTotal =
+            report.buckets.fold<int>(0, (sum, b) => sum + b.actualMinor);
+        expect(bucketTotal, report.spend.actualMinor); // and so do the lines
+
+        final closedLine =
+            report.buckets.singleWhere((b) => b.bucket.id == 'closed');
+        expect(closedLine.actualMinor, 300);
+      },
+    );
+
     test('left to spend is plan minus actual, and goes negative on overspend',
         () {
       final report = build(

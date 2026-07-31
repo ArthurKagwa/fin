@@ -78,10 +78,17 @@ const _currencySymbols = {
 String currencySymbol(String currencyCode) =>
     _currencySymbols[currencyCode.toUpperCase()] ?? currencyCode.toUpperCase();
 
-/// True when [currencySymbol] returned a real symbol rather than falling back
-/// to the code. Callers use this to decide spacing: "$12.00" but "UGX 1,200".
-bool currencyHasSymbol(String currencyCode) =>
-    _currencySymbols.containsKey(currencyCode.toUpperCase());
+final _pureLetters = RegExp(r'^[A-Za-z]+$');
+
+/// True when [currencySymbol] returned a real glyph that sits tight against a
+/// number ("$12.00", "HK$12.00"). False both when it fell back to the ISO
+/// code and when the "symbol" is itself just letters ("USh", "CHF") — those
+/// read exactly like a code and need the same spacing gap, or "USh1,200"
+/// reads as one word instead of a currency and an amount.
+bool currencyHasSymbol(String currencyCode) {
+  final symbol = _currencySymbols[currencyCode.toUpperCase()];
+  return symbol != null && !_pureLetters.hasMatch(symbol);
+}
 
 class CountryOption {
   const CountryOption(this.code, this.name, this.currencyCode);

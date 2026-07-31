@@ -1,7 +1,9 @@
 import 'package:fintrack/core/utils/money.dart';
+import 'package:fintrack/features/buckets/application/bucket.dart';
 import 'package:fintrack/features/buckets/data/bucket_repository.dart';
 import 'package:fintrack/features/expenses/application/expense.dart';
 import 'package:fintrack/features/expenses/data/expense_repository.dart';
+import 'package:fintrack/features/expenses/presentation/add_expense_sheet.dart';
 import 'package:fintrack/features/expenses/presentation/expense_controller.dart';
 import 'package:fintrack/features/planning/application/monthly_plan.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
@@ -22,8 +24,26 @@ class TransactionsScreen extends ConsumerStatefulWidget {
 
 class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   late DateTime _month = normaliseMonth(DateTime.now());
+  final _searchController = TextEditingController();
+  String? _filterBucketId;
 
   bool get _canGoForward => _month.isBefore(normaliseMonth(DateTime.now()));
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<Expense> _applyFilters(List<Expense> expenses) {
+    final query = _searchController.text.trim().toLowerCase();
+    return expenses.where((expense) {
+      if (_filterBucketId != null && expense.bucketId != _filterBucketId) return false;
+      if (query.isEmpty) return true;
+      final haystack = '${expense.payee ?? ''} ${expense.note ?? ''}'.toLowerCase();
+      return haystack.contains(query);
+    }).toList();
+  }
 
   Future<void> _delete(Expense expense, String bucketName) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -99,6 +119,60 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search payee or note',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _searchController.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () => setState(_searchController.clear),
+                      ),
+                isDense: true,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          bucketsAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
+            data: (buckets) {
+              if (buckets.length < 2) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: SizedBox(
+                  height: 36,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: const Text('All'),
+                          selected: _filterBucketId == null,
+                          onSelected: (_) => setState(() => _filterBucketId = null),
+                        ),
+                      ),
+                      for (final bucket in buckets)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(bucket.name),
+                            selected: _filterBucketId == bucket.id,
+                            onSelected: (_) => setState(() => _filterBucketId = bucket.id),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
           Expanded(
             child: expensesAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -108,10 +182,25 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                   child: Text('Could not load transactions: $error'),
                 ),
               ),
-              data: (expenses) {
-                if (expenses.isEmpty) return _EmptyMonth(month: _month);
+              data: (allExpenses) {
+                final expenses = _applyFilters(allExpenses);
+                if (expenses.isEmpty) {
+                  return allExpenses.isEmpty
+                      ? _EmptyMonth(month: _month)
+                      : Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Text(
+                              'Nothing matches that search or filter.',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                          ),
+                        );
+                }
                 final names = {
-                  for (final bucket in bucketsAsync.asData?.value ?? const [])
+                  for (final bucket in bucketsAsync.asData?.value ?? const <Bucket>[])
                     bucket.id: bucket.name,
                 };
                 return _TransactionList(
@@ -276,6 +365,12 @@ class _SwipeableExpense extends StatelessWidget {
         trailing: Text(
           formatMoney(expense.amountMinor, currency: currency),
           style: theme.textTheme.titleSmall,
+        ),
+        onTap: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (_) => AddExpenseSheet(expense: expense),
         ),
       ),
     );

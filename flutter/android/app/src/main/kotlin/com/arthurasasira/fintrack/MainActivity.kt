@@ -1,5 +1,8 @@
 package com.arthurasasira.fintrack
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// FlutterFragmentActivity, not FlutterActivity: local_auth's Android
+// implementation (androidx.biometric.BiometricPrompt) requires a
+// FragmentActivity host.
+class MainActivity : FlutterFragmentActivity()

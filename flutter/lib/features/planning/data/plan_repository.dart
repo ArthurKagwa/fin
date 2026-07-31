@@ -72,9 +72,14 @@ class FirestorePlanRepository implements PlanRepository {
     // Subscribes to the plan document directly rather than reusing
     // [watchPlan], which would open a second listener on the same buckets
     // collection just to hand the same list back.
+    //
+    // Uses watchAllBuckets (not watchActiveBuckets): a bucket archived or
+    // deleted mid-month must keep a per-bucket variance line for its
+    // historical spend, or that spend still counts in the grand total below
+    // but has nowhere to reconcile against.
     return combineLatest4(
       _collection.doc(monthKey(resolved)).snapshots(),
-      _bucketRepository.watchActiveBuckets(),
+      _bucketRepository.watchAllBuckets(),
       _expenseRepository.watchExpenses(month: resolved),
       _incomeRepository.watchIncomeEvents(month: resolved),
       (
@@ -105,6 +110,8 @@ class FirestorePlanRepository implements PlanRepository {
       final bucketDocs = await _buckets.orderBy('sortOrder').get();
       final bucketPlans = <String, int>{};
       for (final doc in bucketDocs.docs) {
+        // Skip archived buckets — don't re-plan spend into a dead envelope.
+        if (doc.data()['archivedAt'] != null) continue;
         final planned = doc.data()['plannedMinor'] as num?;
         if (planned != null) bucketPlans[doc.id] = planned.toInt();
       }

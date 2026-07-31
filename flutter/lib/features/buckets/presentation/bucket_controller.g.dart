@@ -41,7 +41,7 @@ final class BucketControllerProvider
   }
 }
 
-String _$bucketControllerHash() => r'cb3cdf3af761e8111e4321b1b836d73d1bf9b93c';
+String _$bucketControllerHash() => r'6beff9747a61cc595ebc42a4543025ed1dc0df93';
 
 abstract class _$BucketController extends $Notifier<AsyncValue<void>> {
   AsyncValue<void> build();

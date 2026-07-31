@@ -154,7 +154,7 @@ final class IncomeEventsForMonthProvider
 }
 
 String _$incomeEventsForMonthHash() =>
-    r'0f4c1a7b9d2e5836a1c04be7f39d5c2a8b61e074';
+    r'8478d9e4cfc23a69837ef8c73694895fa3723429';
 
 final class IncomeEventsForMonthFamily extends $Family
     with $FunctionalFamilyOverride<Stream<List<IncomeEvent>>, DateTime> {

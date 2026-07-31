@@ -31,4 +31,43 @@ class IncomeController extends _$IncomeController {
           ),
     );
   }
+
+  Future<void> updateIncome(
+    String id, {
+    required IncomeKind kind,
+    required int amountMinor,
+    required DateTime occurredOn,
+    required String source,
+    int? grossMinor,
+    String? note,
+    List<({String label, int amountMinor})> deductions = const [],
+  }) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(incomeRepositoryProvider).updateIncomeEvent(
+            id,
+            kind: kind,
+            amountMinor: amountMinor,
+            occurredOn: occurredOn,
+            source: source,
+            grossMinor: grossMinor,
+            note: note,
+            deductions: deductions,
+          ),
+    );
+  }
+
+  Future<void> deleteIncome(String id) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(incomeRepositoryProvider).deleteIncomeEvent(id),
+    );
+  }
+
+  Future<void> restoreIncome(String id) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(incomeRepositoryProvider).restoreIncomeEvent(id),
+    );
+  }
 }

@@ -1,14 +1,23 @@
 import 'package:fintrack/core/utils/money.dart';
 import 'package:fintrack/core/widgets/date_chip.dart';
 import 'package:fintrack/core/widgets/money_field.dart';
+import 'package:fintrack/features/buckets/application/bucket.dart';
 import 'package:fintrack/features/buckets/data/bucket_repository.dart';
+import 'package:fintrack/features/expenses/application/expense.dart';
 import 'package:fintrack/features/expenses/presentation/expense_controller.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AddExpenseSheet extends ConsumerStatefulWidget {
-  const AddExpenseSheet({super.key});
+  const AddExpenseSheet({super.key, this.expense});
+
+  /// Passed directly by the caller (the transactions list already holds it)
+  /// rather than looked up by id — unlike bucket editing, there's no route
+  /// to resolve this from.
+  final Expense? expense;
+
+  bool get isEditing => expense != null;
 
   @override
   ConsumerState<AddExpenseSheet> createState() => _AddExpenseSheetState();
@@ -17,9 +26,24 @@ class AddExpenseSheet extends ConsumerStatefulWidget {
 class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
-  DateTime _date = DateTime.now();
+  late DateTime _date = widget.expense?.occurredOn ?? DateTime.now();
   String? _bucketId;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final expense = widget.expense;
+    if (expense != null) {
+      _bucketId = expense.bucketId;
+      setMoneyField(
+        _amountController,
+        expense.amountMinor,
+        currency: ref.read(currencyCodeProvider),
+      );
+      _noteController.text = expense.payee ?? '';
+    }
+  }
 
   @override
   void dispose() {
@@ -34,7 +58,7 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
       setState(() => _error = 'Amount must be more than zero');
       return;
     }
-    final buckets = ref.read(activeBucketsProvider).asData?.value ?? const [];
+    final buckets = ref.read(activeBucketsProvider).asData?.value ?? const <Bucket>[];
     final bucketId = _bucketId ?? (buckets.isEmpty ? null : buckets.first.id);
     if (bucketId == null) {
       setState(() => _error = 'Pick a bucket');
@@ -42,12 +66,32 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
     }
 
     final note = _noteController.text.trim();
-    final created = await ref.read(expenseControllerProvider.notifier).addExpense(
-          bucketId: bucketId,
-          amountMinor: amount,
-          occurredOn: _date,
-          payee: note.isEmpty ? null : note,
-        );
+    final controller = ref.read(expenseControllerProvider.notifier);
+    final currency = ref.read(currencyCodeProvider);
+
+    if (widget.isEditing) {
+      await controller.updateExpense(
+        widget.expense!.id,
+        bucketId: bucketId,
+        amountMinor: amount,
+        occurredOn: _date,
+        payee: note.isEmpty ? null : note,
+      );
+      if (!mounted) return;
+      if (ref.read(expenseControllerProvider).hasError) {
+        setState(() => _error = 'Could not save. Try again.');
+        return;
+      }
+      Navigator.of(context).pop();
+      return;
+    }
+
+    final created = await controller.addExpense(
+      bucketId: bucketId,
+      amountMinor: amount,
+      occurredOn: _date,
+      payee: note.isEmpty ? null : note,
+    );
 
     if (!mounted) return;
     if (created == null) {
@@ -55,7 +99,6 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
       return;
     }
 
-    final currency = ref.read(currencyCodeProvider);
     final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
     messenger.showSnackBar(
@@ -104,7 +147,10 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
               ),
             ),
             const SizedBox(height: 24),
-            Text('Add Expense', style: Theme.of(context).textTheme.headlineMedium),
+            Text(
+              widget.isEditing ? 'Edit Expense' : 'Add Expense',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
             const SizedBox(height: 24),
             MoneyField(
               controller: _amountController,

@@ -8,7 +8,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AddIncomeSheet extends ConsumerStatefulWidget {
-  const AddIncomeSheet({super.key});
+  const AddIncomeSheet({super.key, this.event});
+
+  /// Passed directly by the caller, same as [AddExpenseSheet] — the income
+  /// list already holds it, so there's no id-lookup route to resolve.
+  final IncomeEvent? event;
+
+  bool get isEditing => event != null;
 
   @override
   ConsumerState<AddIncomeSheet> createState() => _AddIncomeSheetState();
@@ -29,6 +35,28 @@ class _AddIncomeSheetState extends ConsumerState<AddIncomeSheet> {
   DateTime _date = DateTime.now();
   final List<_DeductionRow> _deductions = [];
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final event = widget.event;
+    if (event == null) return;
+    final currency = ref.read(currencyCodeProvider);
+    _kind = event.kind;
+    _sourceController.text = event.source;
+    _date = event.occurredOn;
+    if (event.isPaycheque) {
+      setMoneyField(_grossController, event.grossMinor, currency: currency);
+      for (final deduction in event.deductions) {
+        final row = _DeductionRow();
+        row.label.text = deduction.label;
+        setMoneyField(row.amount, deduction.amountMinor, currency: currency);
+        _deductions.add(row);
+      }
+    } else {
+      setMoneyField(_amountController, event.amountMinor, currency: currency);
+    }
+  }
 
   @override
   void dispose() {
@@ -52,18 +80,19 @@ class _AddIncomeSheetState extends ConsumerState<AddIncomeSheet> {
       return;
     }
 
+    final int amountMinor;
+    final int? grossMinor;
+    final List<({String label, int amountMinor})> deductions;
+
     if (_kind == IncomeKind.other) {
       final amount = moneyFromField(_amountController);
       if (amount <= 0) {
         setState(() => _error = 'Amount must be more than zero');
         return;
       }
-      await ref.read(incomeControllerProvider.notifier).addIncome(
-            kind: IncomeKind.other,
-            amountMinor: amount,
-            occurredOn: _date,
-            source: source,
-          );
+      amountMinor = amount;
+      grossMinor = null;
+      deductions = const [];
     } else {
       final gross = moneyFromField(_grossController);
       if (gross <= 0) {
@@ -74,21 +103,35 @@ class _AddIncomeSheetState extends ConsumerState<AddIncomeSheet> {
         setState(() => _error = 'Deductions can\'t exceed gross');
         return;
       }
-      await ref.read(incomeControllerProvider.notifier).addIncome(
-            kind: IncomeKind.paycheque,
-            amountMinor: gross - _deductionsTotal,
-            grossMinor: gross,
-            occurredOn: _date,
-            source: source,
-            deductions: [
-              for (final row in _deductions)
-                if (row.label.text.trim().isNotEmpty)
-                  (
-                    label: row.label.text.trim(),
-                    amountMinor: moneyFromField(row.amount),
-                  ),
-            ],
-          );
+      amountMinor = gross - _deductionsTotal;
+      grossMinor = gross;
+      deductions = [
+        for (final row in _deductions)
+          if (row.label.text.trim().isNotEmpty)
+            (label: row.label.text.trim(), amountMinor: moneyFromField(row.amount)),
+      ];
+    }
+
+    final controller = ref.read(incomeControllerProvider.notifier);
+    if (widget.isEditing) {
+      await controller.updateIncome(
+        widget.event!.id,
+        kind: _kind,
+        amountMinor: amountMinor,
+        occurredOn: _date,
+        source: source,
+        grossMinor: grossMinor,
+        deductions: deductions,
+      );
+    } else {
+      await controller.addIncome(
+        kind: _kind,
+        amountMinor: amountMinor,
+        occurredOn: _date,
+        source: source,
+        grossMinor: grossMinor,
+        deductions: deductions,
+      );
     }
 
     if (!mounted) return;
@@ -130,7 +173,10 @@ class _AddIncomeSheetState extends ConsumerState<AddIncomeSheet> {
               ),
             ),
             const SizedBox(height: 24),
-            Text('Add money in', style: Theme.of(context).textTheme.headlineMedium),
+            Text(
+              widget.isEditing ? 'Edit money in' : 'Add money in',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
             const SizedBox(height: 24),
             SegmentedButton<IncomeKind>(
               segments: const [

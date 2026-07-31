@@ -17,6 +17,23 @@ abstract class IncomeRepository {
     String? note,
     List<({String label, int amountMinor})> deductions = const [],
   });
+
+  Future<void> updateIncomeEvent(
+    String id, {
+    required IncomeKind kind,
+    required int amountMinor,
+    required DateTime occurredOn,
+    required String source,
+    int? grossMinor,
+    String? note,
+    List<({String label, int amountMinor})> deductions = const [],
+  });
+
+  Future<void> deleteIncomeEvent(String id);
+
+  /// Clears the soft-delete marker — same reversible-Undo shape as expense
+  /// deletes.
+  Future<void> restoreIncomeEvent(String id);
 }
 
 class FirestoreIncomeRepository implements IncomeRepository {
@@ -25,8 +42,11 @@ class FirestoreIncomeRepository implements IncomeRepository {
   final FirebaseFirestore _firestore;
   final String _uid;
 
+  DocumentReference<Map<String, dynamic>> get _profileDoc =>
+      _firestore.collection('users').doc(_uid);
+
   CollectionReference<Map<String, dynamic>> get _collection =>
-      _firestore.collection('users').doc(_uid).collection('incomeEvents');
+      _profileDoc.collection('incomeEvents');
 
   @override
   Stream<List<IncomeEvent>> watchIncomeEvents({DateTime? month}) {
@@ -40,7 +60,10 @@ class FirestoreIncomeRepository implements IncomeRepository {
           .where('occurredOn', isLessThan: Timestamp.fromDate(end));
     }
     return query.snapshots().map(
-          (snapshot) => snapshot.docs.map(_fromDoc).toList(),
+          (snapshot) => snapshot.docs
+              .map(_fromDoc)
+              .where((event) => !event.isDeleted)
+              .toList(),
         );
   }
 
@@ -54,7 +77,12 @@ class FirestoreIncomeRepository implements IncomeRepository {
     String? note,
     List<({String label, int amountMinor})> deductions = const [],
   }) async {
-    final doc = await _collection.add({
+    // A batch, not a transaction: nothing here is read-then-written, so
+    // there's no consistency race to protect against — just two writes that
+    // must land together.
+    final docRef = _collection.doc();
+    final batch = _firestore.batch();
+    batch.set(docRef, {
       'kind': kind.name,
       'amountMinor': amountMinor,
       'occurredOn': Timestamp.fromDate(occurredOn),
@@ -70,9 +98,88 @@ class FirestoreIncomeRepository implements IncomeRepository {
             'sortOrder': i,
           },
       ],
+      'deletedAt': null,
     });
-    final snapshot = await doc.get();
+    batch.update(_profileDoc, {'unallocatedMinor': FieldValue.increment(amountMinor)});
+    await batch.commit();
+    final snapshot = await docRef.get();
     return _fromDoc(snapshot);
+  }
+
+  @override
+  Future<void> updateIncomeEvent(
+    String id, {
+    required IncomeKind kind,
+    required int amountMinor,
+    required DateTime occurredOn,
+    required String source,
+    int? grossMinor,
+    String? note,
+    List<({String label, int amountMinor})> deductions = const [],
+  }) async {
+    // Callers only reach this for an event with no allocations against it
+    // (checked via AllocationRepository.hasAllocationsForIncomeEvent before
+    // the edit screen is even opened), so its whole amount is still sitting
+    // in unallocatedMinor — the delta just needs folding in.
+    final docRef = _collection.doc(id);
+    await _firestore.runTransaction((tx) async {
+      final snapshot = await tx.get(docRef);
+      final oldAmount = (snapshot.data()?['amountMinor'] as num?)?.toInt() ?? 0;
+      final profileSnapshot = await tx.get(_profileDoc);
+      final currentUnallocated =
+          (profileSnapshot.data()?['unallocatedMinor'] as num?)?.toInt() ?? 0;
+
+      tx.update(docRef, {
+        'kind': kind.name,
+        'amountMinor': amountMinor,
+        'occurredOn': Timestamp.fromDate(occurredOn),
+        'source': source,
+        'grossMinor': grossMinor,
+        'note': note,
+        'deductions': [
+          for (var i = 0; i < deductions.length; i++)
+            {
+              'id': '$i',
+              'label': deductions[i].label,
+              'amountMinor': deductions[i].amountMinor,
+              'sortOrder': i,
+            },
+        ],
+      });
+      tx.update(_profileDoc, {
+        'unallocatedMinor': currentUnallocated - oldAmount + amountMinor,
+      });
+    });
+  }
+
+  @override
+  Future<void> deleteIncomeEvent(String id) async {
+    final docRef = _collection.doc(id);
+    await _firestore.runTransaction((tx) async {
+      final snapshot = await tx.get(docRef);
+      final data = snapshot.data();
+      // Idempotency guard: already deleted, don't double-credit-back nothing
+      // twice if this somehow runs again.
+      if (data == null || data['deletedAt'] != null) return;
+
+      final amountMinor = (data['amountMinor'] as num?)?.toInt() ?? 0;
+      tx.update(docRef, {'deletedAt': Timestamp.now()});
+      tx.update(_profileDoc, {'unallocatedMinor': FieldValue.increment(-amountMinor)});
+    });
+  }
+
+  @override
+  Future<void> restoreIncomeEvent(String id) async {
+    final docRef = _collection.doc(id);
+    await _firestore.runTransaction((tx) async {
+      final snapshot = await tx.get(docRef);
+      final data = snapshot.data();
+      if (data == null || data['deletedAt'] == null) return;
+
+      final amountMinor = (data['amountMinor'] as num?)?.toInt() ?? 0;
+      tx.update(docRef, {'deletedAt': null});
+      tx.update(_profileDoc, {'unallocatedMinor': FieldValue.increment(amountMinor)});
+    });
   }
 
   IncomeEvent _fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -97,6 +204,7 @@ class FirestoreIncomeRepository implements IncomeRepository {
       grossMinor: data['grossMinor'] as int?,
       note: data['note'] as String?,
       deductions: deductions,
+      deletedAt: (data['deletedAt'] as Timestamp?)?.toDate(),
     );
   }
 }

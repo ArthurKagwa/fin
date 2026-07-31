@@ -54,6 +54,23 @@ dependencies:
   # `printing` hands it to the platform share sheet.
   pdf: ^3.11.0
   printing: ^5.13.0
+  # Evening reminder (Settings > Evening reminder). Local, not push —
+  # firebase_messaging above is for server-sent messages and isn't the right
+  # tool for a client-scheduled daily reminder. `timezone` is required by
+  # flutter_local_notifications for calendar-time scheduling.
+  flutter_local_notifications: ^22.2.0
+  timezone: ^0.11.1
+  # CSV import (Settings > Import).
+  file_picker: ^11.0.3
+  csv: ^8.0.0
+  # Monthly spend trend chart (History).
+  fl_chart: ^1.2.0
+  # App lock (Settings > App lock). Delegates to the device's own Face ID /
+  # fingerprint / PIN via local_auth rather than a custom in-app PIN.
+  # shared_preferences holds the one local, per-device setting this app has
+  # — whether app lock is on — deliberately not synced via Firestore.
+  local_auth: ^3.0.2
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:

@@ -182,6 +182,7 @@ class _RecurringRow extends ConsumerWidget {
     final currency = ref.watch(currencyCodeProvider);
     return ListTile(
       contentPadding: EdgeInsets.zero,
+      onTap: () => context.push('/recurring/${payment.id}/edit'),
       leading: CircleAvatar(
         backgroundColor: colorScheme.surfaceContainerHigh,
         foregroundColor: colorScheme.onSurfaceVariant,
