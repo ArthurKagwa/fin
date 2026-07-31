@@ -45,7 +45,7 @@ class PlanSummary extends StatelessWidget {
                   Text(
                     formatMoney(
                       report.leftToSpendMinor.abs(),
-                      symbol: currency,
+                      currency: currency,
                     ),
                     style: theme.textTheme.displaySmall?.copyWith(
                       color: isOverspent ? colorScheme.error : null,
@@ -83,7 +83,7 @@ class PlanSummary extends StatelessWidget {
           const SizedBox(height: 16),
           _PlanWarning(
             message:
-                'Your plan spends ${formatMoney(report.plannedOverspendMinor, symbol: currency)} '
+                'Your plan spends ${formatMoney(report.plannedOverspendMinor, currency: currency)} '
                 'more than you expect to earn.',
           ),
         ],
@@ -112,9 +112,9 @@ String _headline(PlanVsActual report, String currency) {
   if (!report.isCurrentMonth) {
     final variance = report.spend.varianceMinor;
     if (variance > 0) {
-      return 'Finished ${formatMoney(variance, symbol: currency)} over plan.';
+      return 'Finished ${formatMoney(variance, currency: currency)} over plan.';
     }
-    return 'Finished ${formatMoney(-variance, symbol: currency)} under plan.';
+    return 'Finished ${formatMoney(-variance, currency: currency)} under plan.';
   }
 
   final buffer = StringBuffer('${report.daysRemaining} days left');
@@ -123,11 +123,11 @@ String _headline(PlanVsActual report, String currency) {
     final gap = projected - report.spend.plannedMinor;
     if (gap > 0) {
       buffer.write(
-        ' · at this rate you finish ${formatMoney(gap, symbol: currency)} over',
+        ' · at this rate you finish ${formatMoney(gap, currency: currency)} over',
       );
     } else {
       buffer.write(
-        ' · at this rate you finish ${formatMoney(-gap, symbol: currency)} under',
+        ' · at this rate you finish ${formatMoney(-gap, currency: currency)} under',
       );
     }
   }

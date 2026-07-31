@@ -1,9 +1,11 @@
 import 'package:fintrack/core/utils/money.dart';
+import 'package:fintrack/core/widgets/money_field.dart';
 import 'package:fintrack/features/buckets/application/bucket.dart';
 import 'package:fintrack/features/buckets/data/bucket_repository.dart';
 import 'package:fintrack/features/planning/application/monthly_plan.dart';
 import 'package:fintrack/features/planning/data/plan_repository.dart';
 import 'package:fintrack/features/planning/presentation/plan_controller.dart';
+import 'package:fintrack/features/profile/data/profile_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -42,17 +44,17 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
     super.dispose();
   }
 
-  void _prefill(MonthlyPlan plan, List<Bucket> buckets) {
+  void _prefill(MonthlyPlan plan, List<Bucket> buckets, String currency) {
     if (_prefilled) return;
     _prefilled = true;
     for (final income in plan.expectedIncomes) {
-      _incomeRows.add(_IncomeRowState.from(income));
+      _incomeRows.add(_IncomeRowState.from(income, currency));
     }
     if (_incomeRows.isEmpty) _incomeRows.add(_IncomeRowState.empty());
     for (final bucket in buckets) {
-      final planned = plan.plannedForBucket(bucket.id);
-      _bucketControllers[bucket.id] =
-          TextEditingController(text: planned == 0 ? '' : planned.toString());
+      final controller = TextEditingController();
+      setMoneyField(controller, plan.plannedForBucket(bucket.id), currency: currency);
+      _bucketControllers[bucket.id] = controller;
     }
   }
 
@@ -61,12 +63,17 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
     for (var i = 0; i < _incomeRows.length; i++) {
       final row = _incomeRows[i];
       final label = row.label.text.trim();
-      final amount = int.tryParse(row.amount.text.replaceAll(',', ''));
+      final isBlank = moneyFieldIsEmpty(row.amount);
+      final amount = moneyFromField(row.amount);
       // A half-filled row is a typo, not an intention — dropping it silently
       // would lose money from the plan without telling anyone.
-      if (label.isEmpty && amount == null) continue;
-      if (label.isEmpty || amount == null) {
-        setState(() => _error = 'Every income source needs a name and an amount.');
+      if (label.isEmpty && isBlank) continue;
+      if (label.isEmpty || isBlank || amount <= 0) {
+        setState(() {
+          _error = label.isEmpty
+              ? 'Name the income source on row ${i + 1}.'
+              : 'Enter an amount for "$label".';
+        });
         return;
       }
       expectedIncomes.add(
@@ -81,8 +88,9 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
 
     final bucketPlans = <String, int>{};
     for (final entry in _bucketControllers.entries) {
-      final amount = int.tryParse(entry.value.text.replaceAll(',', ''));
-      if (amount != null && amount > 0) bucketPlans[entry.key] = amount;
+      if (moneyFieldIsEmpty(entry.value)) continue;
+      final amount = moneyFromField(entry.value);
+      if (amount > 0) bucketPlans[entry.key] = amount;
     }
 
     setState(() => _error = null);
@@ -105,6 +113,7 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
     final month = ref.watch(selectedPlanMonthProvider);
     final planAsync = ref.watch(monthlyPlanProvider(month));
     final bucketsAsync = ref.watch(activeBucketsProvider);
+    final currency = ref.watch(currencyCodeProvider);
     final isSaving = ref.watch(planControllerProvider).isLoading;
 
     return Scaffold(
@@ -116,15 +125,20 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(child: Text('Could not load buckets: $error')),
           data: (buckets) {
-            _prefill(plan, buckets);
-            return _buildForm(month, buckets, isSaving);
+            _prefill(plan, buckets, currency);
+            return _buildForm(month, buckets, currency, isSaving);
           },
         ),
       ),
     );
   }
 
-  Widget _buildForm(DateTime month, List<Bucket> buckets, bool isSaving) {
+  Widget _buildForm(
+    DateTime month,
+    List<Bucket> buckets,
+    String currency,
+    bool isSaving,
+  ) {
     final theme = Theme.of(context);
 
     return ListView(
@@ -142,6 +156,7 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
         for (var i = 0; i < _incomeRows.length; i++) ...[
           _IncomeSourceFields(
             row: _incomeRows[i],
+            currency: currency,
             onRemove: _incomeRows.length == 1
                 ? null
                 : () => setState(
@@ -171,10 +186,16 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
           )
         else
           for (final bucket in buckets) ...[
-            TextField(
-              controller: _bucketControllers[bucket.id],
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: bucket.name),
+            MoneyField(
+              // `_prefill` runs once, so a bucket created on another device
+              // while this screen is open would have no controller. Creating
+              // it lazily beats a null assertion crash.
+              controller: _bucketControllers.putIfAbsent(
+                bucket.id,
+                TextEditingController.new,
+              ),
+              currency: currency,
+              label: bucket.name,
             ),
             const SizedBox(height: 12),
           ],
@@ -206,11 +227,15 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
 class _IncomeRowState {
   _IncomeRowState({required this.id, required this.label, required this.amount});
 
-  factory _IncomeRowState.from(ExpectedIncome income) => _IncomeRowState(
-        id: income.id,
-        label: TextEditingController(text: income.label),
-        amount: TextEditingController(text: income.amountMinor.toString()),
-      );
+  factory _IncomeRowState.from(ExpectedIncome income, String currency) {
+    final amount = TextEditingController();
+    setMoneyField(amount, income.amountMinor, currency: currency);
+    return _IncomeRowState(
+      id: income.id,
+      label: TextEditingController(text: income.label),
+      amount: amount,
+    );
+  }
 
   factory _IncomeRowState.empty() => _IncomeRowState(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -229,9 +254,14 @@ class _IncomeRowState {
 }
 
 class _IncomeSourceFields extends StatelessWidget {
-  const _IncomeSourceFields({required this.row, this.onRemove});
+  const _IncomeSourceFields({
+    required this.row,
+    required this.currency,
+    this.onRemove,
+  });
 
   final _IncomeRowState row;
+  final String currency;
   final VoidCallback? onRemove;
 
   @override
@@ -249,10 +279,10 @@ class _IncomeSourceFields extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           flex: 2,
-          child: TextField(
+          child: MoneyField(
             controller: row.amount,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Amount'),
+            currency: currency,
+            label: 'Amount',
           ),
         ),
         IconButton(

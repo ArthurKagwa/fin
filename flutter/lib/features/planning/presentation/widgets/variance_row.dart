@@ -41,12 +41,12 @@ class VarianceRow extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Text(
-              formatMoney(line.actualMinor, symbol: currency),
+              formatMoney(line.actualMinor, currency: currency),
               style: theme.textTheme.titleMedium,
             ),
             if (line.hasPlan)
               Text(
-                ' of ${formatMoney(line.plannedMinor, symbol: currency)}',
+                ' of ${formatMoney(line.plannedMinor, currency: currency)}',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),

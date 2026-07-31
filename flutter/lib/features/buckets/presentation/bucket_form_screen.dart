@@ -1,4 +1,6 @@
+import 'package:fintrack/core/widgets/money_field.dart';
 import 'package:fintrack/features/buckets/application/bucket.dart';
+import 'package:fintrack/features/profile/data/profile_repository.dart';
 import 'package:fintrack/features/buckets/data/bucket_repository.dart';
 import 'package:fintrack/features/buckets/presentation/bucket_controller.dart';
 import 'package:flutter/material.dart';
@@ -31,12 +33,12 @@ class _BucketFormScreenState extends ConsumerState<BucketFormScreen> {
     super.dispose();
   }
 
-  void _prefill(Bucket bucket) {
+  void _prefill(Bucket bucket, String currency) {
     if (_prefilled) return;
     _prefilled = true;
     _nameController.text = bucket.name;
-    _plannedController.text = bucket.plannedMinor?.toString() ?? '';
-    _goalController.text = bucket.goalMinor?.toString() ?? '';
+    setMoneyField(_plannedController, bucket.plannedMinor, currency: currency);
+    setMoneyField(_goalController, bucket.goalMinor, currency: currency);
   }
 
   Future<void> _submit() async {
@@ -45,8 +47,14 @@ class _BucketFormScreenState extends ConsumerState<BucketFormScreen> {
       setState(() => _error = 'Name is required');
       return;
     }
-    final planned = int.tryParse(_plannedController.text.replaceAll(',', ''));
-    final goal = int.tryParse(_goalController.text.replaceAll(',', ''));
+    // Empty means "not set"; anything typed is a real number, because the
+    // field cannot hold an unparseable value. Previously "12.50" silently
+    // became null and wiped a saved amount.
+    final planned = moneyFieldIsEmpty(_plannedController)
+        ? null
+        : moneyFromField(_plannedController);
+    final goal =
+        moneyFieldIsEmpty(_goalController) ? null : moneyFromField(_goalController);
     final controller = ref.read(bucketControllerProvider.notifier);
 
     if (widget.isEditing) {
@@ -71,6 +79,7 @@ class _BucketFormScreenState extends ConsumerState<BucketFormScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final currency = ref.watch(currencyCodeProvider);
     final isSaving = ref.watch(bucketControllerProvider).isLoading;
 
     Widget buildForm() {
@@ -83,16 +92,16 @@ class _BucketFormScreenState extends ConsumerState<BucketFormScreen> {
             decoration: const InputDecoration(labelText: 'Name'),
           ),
           const SizedBox(height: 16),
-          TextField(
+          MoneyField(
             controller: _plannedController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Planned amount (optional)'),
+            currency: currency,
+            label: 'Planned amount each month (optional)',
           ),
           const SizedBox(height: 16),
-          TextField(
+          MoneyField(
             controller: _goalController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Goal amount (optional)'),
+            currency: currency,
+            label: 'Goal amount (optional)',
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
@@ -140,7 +149,7 @@ class _BucketFormScreenState extends ConsumerState<BucketFormScreen> {
           if (bucket == null) {
             return const Center(child: Text('Bucket not found.'));
           }
-          _prefill(bucket);
+          _prefill(bucket, currency);
           return buildForm();
         },
       ),

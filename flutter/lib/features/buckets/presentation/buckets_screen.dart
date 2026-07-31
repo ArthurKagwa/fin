@@ -77,8 +77,8 @@ class BucketsScreen extends ConsumerWidget {
                     title: Text(bucket.name, style: Theme.of(context).textTheme.titleMedium),
                     subtitle: Text(
                       bucket.goalMinor != null
-                          ? 'Planned ${formatMoney(bucket.plannedMinor ?? 0, symbol: currency)} · Goal ${formatMoney(bucket.goalMinor!, symbol: currency)}'
-                          : 'Planned ${formatMoney(bucket.plannedMinor ?? 0, symbol: currency)}',
+                          ? 'Planned ${formatMoney(bucket.plannedMinor ?? 0, currency: currency)} · Goal ${formatMoney(bucket.goalMinor!, currency: currency)}'
+                          : 'Planned ${formatMoney(bucket.plannedMinor ?? 0, currency: currency)}',
                     ),
                     trailing: Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
                   ),

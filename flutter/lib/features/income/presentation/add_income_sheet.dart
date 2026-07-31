@@ -1,4 +1,6 @@
 import 'package:fintrack/core/utils/money.dart';
+import 'package:fintrack/core/widgets/date_chip.dart';
+import 'package:fintrack/core/widgets/money_field.dart';
 import 'package:fintrack/features/income/application/income_event.dart';
 import 'package:fintrack/features/income/presentation/income_controller.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
@@ -40,10 +42,8 @@ class _AddIncomeSheetState extends ConsumerState<AddIncomeSheet> {
     super.dispose();
   }
 
-  int get _deductionsTotal => _deductions.fold(
-        0,
-        (sum, row) => sum + (int.tryParse(row.amount.text.replaceAll(',', '')) ?? 0),
-      );
+  int get _deductionsTotal =>
+      _deductions.fold(0, (sum, row) => sum + moneyFromField(row.amount));
 
   Future<void> _save() async {
     final source = _sourceController.text.trim();
@@ -53,8 +53,8 @@ class _AddIncomeSheetState extends ConsumerState<AddIncomeSheet> {
     }
 
     if (_kind == IncomeKind.other) {
-      final amount = int.tryParse(_amountController.text.replaceAll(',', ''));
-      if (amount == null || amount <= 0) {
+      final amount = moneyFromField(_amountController);
+      if (amount <= 0) {
         setState(() => _error = 'Amount must be more than zero');
         return;
       }
@@ -65,8 +65,8 @@ class _AddIncomeSheetState extends ConsumerState<AddIncomeSheet> {
             source: source,
           );
     } else {
-      final gross = int.tryParse(_grossController.text.replaceAll(',', ''));
-      if (gross == null || gross <= 0) {
+      final gross = moneyFromField(_grossController);
+      if (gross <= 0) {
         setState(() => _error = 'Gross amount must be more than zero');
         return;
       }
@@ -85,7 +85,7 @@ class _AddIncomeSheetState extends ConsumerState<AddIncomeSheet> {
                 if (row.label.text.trim().isNotEmpty)
                   (
                     label: row.label.text.trim(),
-                    amountMinor: int.tryParse(row.amount.text.replaceAll(',', '')) ?? 0,
+                    amountMinor: moneyFromField(row.amount),
                   ),
             ],
           );
@@ -105,7 +105,7 @@ class _AddIncomeSheetState extends ConsumerState<AddIncomeSheet> {
     final colorScheme = Theme.of(context).colorScheme;
     final currency = ref.watch(currencyCodeProvider);
     final isLoading = ref.watch(incomeControllerProvider).isLoading;
-    final gross = int.tryParse(_grossController.text.replaceAll(',', '')) ?? 0;
+    final gross = moneyFromField(_grossController);
     final takeHome = gross - _deductionsTotal;
 
     return DraggableScrollableSheet(
@@ -146,47 +146,27 @@ class _AddIncomeSheetState extends ConsumerState<AddIncomeSheet> {
               decoration: const InputDecoration(labelText: 'Source'),
             ),
             const SizedBox(height: 16),
-            InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _date,
-                  firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                  lastDate: DateTime.now().add(const Duration(days: 1)),
-                );
-                if (picked != null) setState(() => _date = picked);
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.calendar_today_outlined, size: 14, color: colorScheme.onSurfaceVariant),
-                    const SizedBox(width: 6),
-                    Text(relativeDate(_date), style: Theme.of(context).textTheme.labelLarge),
-                  ],
-                ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: DateChip(
+                date: _date,
+                onChanged: (picked) => setState(() => _date = picked),
               ),
             ),
             const SizedBox(height: 20),
             if (_kind == IncomeKind.other)
-              TextField(
+              MoneyField(
                 controller: _amountController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Amount'),
-                onChanged: (_) => setState(() {}),
+                currency: currency,
+                label: 'Amount',
+                onChanged: (_) => setState(() => _error = null),
               )
             else ...[
-              TextField(
+              MoneyField(
                 controller: _grossController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Gross amount'),
-                onChanged: (_) => setState(() {}),
+                currency: currency,
+                label: 'Gross amount',
+                onChanged: (_) => setState(() => _error = null),
               ),
               const SizedBox(height: 16),
               Text('Deductions', style: Theme.of(context).textTheme.titleSmall),
@@ -203,10 +183,10 @@ class _AddIncomeSheetState extends ConsumerState<AddIncomeSheet> {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: TextField(
+                      child: MoneyField(
                         controller: row.amount,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Amount'),
+                        currency: currency,
+                        label: 'Amount',
                         onChanged: (_) => setState(() {}),
                       ),
                     ),
@@ -228,7 +208,7 @@ class _AddIncomeSheetState extends ConsumerState<AddIncomeSheet> {
                 children: [
                   Text('Take-home', style: Theme.of(context).textTheme.titleMedium),
                   Text(
-                    formatMoney(takeHome < 0 ? 0 : takeHome, symbol: currency),
+                    formatMoney(takeHome < 0 ? 0 : takeHome, currency: currency),
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           color: colorScheme.secondary,
                         ),

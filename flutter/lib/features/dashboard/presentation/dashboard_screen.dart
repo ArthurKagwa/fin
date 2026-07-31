@@ -129,7 +129,16 @@ class _DashboardBody extends ConsumerWidget {
               occurrences.isEmpty ? const SizedBox.shrink() : _UpcomingCard(occurrences: occurrences),
         ),
         const SizedBox(height: 24),
-        Text('Recent entries', style: Theme.of(context).textTheme.titleLarge),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Recent entries', style: Theme.of(context).textTheme.titleLarge),
+            TextButton(
+              onPressed: () => context.push('/transactions'),
+              child: const Text('See all'),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         recentExpensesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -257,7 +266,7 @@ class _BucketCard extends ConsumerWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${formatMoney(line.actualMinor, symbol: currency)} spent of ${formatMoney(line.plannedMinor, symbol: currency)}',
+                          '${formatMoney(line.actualMinor, currency: currency)} spent of ${formatMoney(line.plannedMinor, currency: currency)}',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: colorScheme.onSurfaceVariant,
                               ),
@@ -269,7 +278,7 @@ class _BucketCard extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        formatMoney(remainingMinor, symbol: currency),
+                        formatMoney(remainingMinor, currency: currency),
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               color: isOverspent ? colorScheme.error : colorScheme.onSurface,
                             ),
@@ -321,7 +330,7 @@ class _BucketCard extends ConsumerWidget {
                     // arrive with allocation (FR-08). Showing a hardcoded 0% on
                     // every goal forever was worse than showing none.
                     Text(
-                      'Goal: ${formatMoney(goalMinor, symbol: currency)}',
+                      'Goal: ${formatMoney(goalMinor, currency: currency)}',
                       style: Theme.of(context).textTheme.labelMedium,
                     ),
                   ],
@@ -346,31 +355,37 @@ class _UpcomingCard extends ConsumerWidget {
     final currency = ref.watch(currencyCodeProvider);
     final total = occurrences.fold<int>(0, (sum, o) => sum + o.expectedMinor);
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(Icons.event_repeat_outlined, color: colorScheme.primary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${occurrences.length} charges in the next 14 days',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  Text(
-                    'Totaling ${formatMoney(total, symbol: currency)}',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
+      clipBehavior: Clip.antiAlias,
+      // The chevron was here before the tap was. An affordance that does
+      // nothing reads as a broken app, not as a decoration.
+      child: InkWell(
+        onTap: () => context.go('/recurring'),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(Icons.event_repeat_outlined, color: colorScheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${occurrences.length} charges in the next 14 days',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    Text(
+                      'Totaling ${formatMoney(total, currency: currency)}',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
-          ],
+              Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
+            ],
+          ),
         ),
       ),
     );
@@ -396,7 +411,7 @@ class _ExpenseRow extends ConsumerWidget {
       title: Text(expense.payee ?? bucketName),
       subtitle: Text('$bucketName · ${relativeDate(expense.occurredOn)}'),
       trailing: Text(
-        '-${formatMoney(expense.amountMinor, symbol: currency)}',
+        '-${formatMoney(expense.amountMinor, currency: currency)}',
         style: Theme.of(context).textTheme.titleSmall,
       ),
     );

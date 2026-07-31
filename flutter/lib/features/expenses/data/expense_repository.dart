@@ -16,6 +16,11 @@ abstract class ExpenseRepository {
   });
 
   Future<void> deleteExpense(String id);
+
+  /// Clears the soft-delete marker. Deletes are reversible by design so the
+  /// UI can offer Undo instead of a confirmation dialog on every correction.
+  Future<void> restoreExpense(String id);
+
   Stream<List<Expense>> watchExpenses({DateTime? month});
 }
 
@@ -52,6 +57,10 @@ class FirestoreExpenseRepository implements ExpenseRepository {
   @override
   Future<void> deleteExpense(String id) =>
       _collection.doc(id).update({'deletedAt': Timestamp.now()});
+
+  @override
+  Future<void> restoreExpense(String id) =>
+      _collection.doc(id).update({'deletedAt': null});
 
   @override
   Stream<List<Expense>> watchExpenses({DateTime? month}) {

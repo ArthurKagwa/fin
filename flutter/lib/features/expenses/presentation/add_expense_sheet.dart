@@ -1,4 +1,6 @@
 import 'package:fintrack/core/utils/money.dart';
+import 'package:fintrack/core/widgets/date_chip.dart';
+import 'package:fintrack/core/widgets/money_field.dart';
 import 'package:fintrack/features/buckets/data/bucket_repository.dart';
 import 'package:fintrack/features/expenses/presentation/expense_controller.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
@@ -27,36 +29,48 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
   }
 
   Future<void> _save() async {
-    final amount = int.tryParse(_amountController.text.replaceAll(',', ''));
-    if (amount == null || amount <= 0) {
+    final amount = moneyFromField(_amountController);
+    if (amount <= 0) {
       setState(() => _error = 'Amount must be more than zero');
       return;
     }
-    if (_bucketId == null) {
+    final buckets = ref.read(activeBucketsProvider).asData?.value ?? const [];
+    final bucketId = _bucketId ?? (buckets.isEmpty ? null : buckets.first.id);
+    if (bucketId == null) {
       setState(() => _error = 'Pick a bucket');
       return;
     }
 
     final note = _noteController.text.trim();
-    await ref.read(expenseControllerProvider.notifier).addExpense(
-          bucketId: _bucketId!,
+    final created = await ref.read(expenseControllerProvider.notifier).addExpense(
+          bucketId: bucketId,
           amountMinor: amount,
           occurredOn: _date,
           payee: note.isEmpty ? null : note,
         );
 
     if (!mounted) return;
-    if (ref.read(expenseControllerProvider).hasError) {
+    if (created == null) {
       setState(() => _error = 'Could not save. Try again.');
       return;
     }
 
     final currency = ref.read(currencyCodeProvider);
+    final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(
-        content: Text('${formatMoney(amount, symbol: currency)} saved'),
+        content: Text('${formatMoney(amount, currency: currency)} saved'),
         duration: const Duration(seconds: 5),
+        // The snackbar was already sitting here for five seconds doing
+        // nothing; catching a mistyped amount in the moment is the single
+        // cheapest correction the app can offer.
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => ref
+              .read(expenseControllerProvider.notifier)
+              .deleteExpense(created.id),
+        ),
       ),
     );
   }
@@ -92,18 +106,11 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
             const SizedBox(height: 24),
             Text('Add Expense', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 24),
-            TextField(
+            MoneyField(
               controller: _amountController,
+              currency: currency,
               autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: false),
-              style: Theme.of(context).textTheme.displaySmall,
-              textAlign: TextAlign.center,
-              decoration: InputDecoration(
-                hintText: '0',
-                prefixText: '$currency ',
-                border: InputBorder.none,
-                filled: false,
-              ),
+              large: true,
               onChanged: (_) => setState(() => _error = null),
             ),
             if (_error != null) ...[
@@ -116,31 +123,11 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
               ),
             ],
             const SizedBox(height: 24),
-            InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _date,
-                  firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                  lastDate: DateTime.now().add(const Duration(days: 1)),
-                );
-                if (picked != null) setState(() => _date = picked);
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.calendar_today_outlined, size: 14, color: colorScheme.onSurfaceVariant),
-                    const SizedBox(width: 6),
-                    Text(relativeDate(_date), style: Theme.of(context).textTheme.labelLarge),
-                  ],
-                ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: DateChip(
+                date: _date,
+                onChanged: (picked) => setState(() => _date = picked),
               ),
             ),
             const SizedBox(height: 24),
@@ -158,7 +145,10 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
                         ),
                   );
                 }
-                _bucketId ??= buckets.first.id;
+                // Resolved rather than assigned: writing to state during build
+                // makes rebuilds unpredictable, and the default is only ever a
+                // display concern — `_save` resolves it the same way.
+                final selectedId = _bucketId ?? buckets.first.id;
                 return Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -166,7 +156,7 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
                     for (final bucket in buckets)
                       ChoiceChip(
                         label: Text(bucket.name),
-                        selected: _bucketId == bucket.id,
+                        selected: selectedId == bucket.id,
                         onSelected: (_) => setState(() => _bucketId = bucket.id),
                       ),
                   ],

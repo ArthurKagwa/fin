@@ -7,14 +7,16 @@ import 'package:fintrack/features/buckets/presentation/bucket_form_screen.dart';
 import 'package:fintrack/features/buckets/presentation/buckets_screen.dart';
 import 'package:fintrack/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:fintrack/features/earnings/presentation/earnings_screen.dart';
+import 'package:fintrack/features/expenses/presentation/transactions_screen.dart';
 import 'package:fintrack/features/income/presentation/income_list_screen.dart';
 import 'package:fintrack/features/onboarding/presentation/currency_setup_screen.dart';
 import 'package:fintrack/features/planning/presentation/plan_editor_screen.dart';
 import 'package:fintrack/features/planning/presentation/plan_vs_actual_screen.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
 import 'package:fintrack/features/profile/presentation/account_screen.dart';
-import 'package:fintrack/features/reports/presentation/export_screen.dart';
+import 'package:fintrack/features/recurring/presentation/recurring_form_screen.dart';
 import 'package:fintrack/features/recurring/presentation/recurring_screen.dart';
+import 'package:fintrack/features/reports/presentation/export_screen.dart';
 import 'package:fintrack/features/settings/presentation/settings_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -99,6 +101,14 @@ GoRouter router(Ref ref) {
       GoRoute(
         path: '/account',
         builder: (context, state) => const AccountScreen(),
+      ),
+      GoRoute(
+        path: '/transactions',
+        builder: (context, state) => const TransactionsScreen(),
+      ),
+      GoRoute(
+        path: '/recurring/new',
+        builder: (context, state) => const RecurringFormScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) =>

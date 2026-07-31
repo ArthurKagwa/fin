@@ -25,6 +25,20 @@ class SettingsScreen extends ConsumerWidget {
           _SettingsCard(
             children: [
               _SettingsRow(
+                icon: Icons.receipt_long_outlined,
+                title: 'Transactions',
+                subtitle: 'Every expense, by month',
+                onTap: () => context.push('/transactions'),
+              ),
+              _SettingsRow(
+                // Reachable only from the empty dashboard before this, so the
+                // list became unreachable the moment you made a bucket.
+                icon: Icons.folder_outlined,
+                title: 'Buckets',
+                subtitle: 'Create, edit and set planned amounts',
+                onTap: () => context.push('/buckets'),
+              ),
+              _SettingsRow(
                 icon: Icons.history,
                 title: 'History',
                 subtitle: 'Browse past months',

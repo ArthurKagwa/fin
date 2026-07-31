@@ -177,11 +177,11 @@ class _Preview extends StatelessWidget {
                 const SizedBox(height: 16),
                 _PreviewLine(
                   label: 'Income received',
-                  value: formatMoney(report.income.actualMinor, symbol: currency),
+                  value: formatMoney(report.income.actualMinor, currency: currency),
                 ),
                 _PreviewLine(
                   label: 'Money spent',
-                  value: formatMoney(report.spend.actualMinor, symbol: currency),
+                  value: formatMoney(report.spend.actualMinor, currency: currency),
                 ),
                 _PreviewLine(
                   label: 'Income entries',

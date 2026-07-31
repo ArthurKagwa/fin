@@ -45,7 +45,7 @@ VarianceStyle varianceStyleFor(
         color: colorScheme.secondary,
         icon: Icons.check_circle_outline,
         label: over > 0
-            ? '${formatMoney(over, symbol: currency)} above plan'
+            ? '${formatMoney(over, currency: currency)} above plan'
             : 'All in',
       );
     }
@@ -54,7 +54,7 @@ VarianceStyle varianceStyleFor(
       VarianceState.offPace || VarianceState.offPlan => VarianceStyle(
           color: AppColors.caution,
           icon: Icons.schedule,
-          label: '${formatMoney(short, symbol: currency)} still to come',
+          label: '${formatMoney(short, currency: currency)} still to come',
         ),
       VarianceState.onTrack => VarianceStyle(
           color: colorScheme.secondary,
@@ -69,7 +69,7 @@ VarianceStyle varianceStyleFor(
     VarianceState.offPlan => VarianceStyle(
         color: colorScheme.error,
         icon: Icons.error_outline,
-        label: 'Over plan by ${formatMoney(line.varianceMinor, symbol: currency)}',
+        label: 'Over plan by ${formatMoney(line.varianceMinor, currency: currency)}',
       ),
     VarianceState.offPace => VarianceStyle(
         color: AppColors.caution,
@@ -87,9 +87,9 @@ VarianceStyle varianceStyleFor(
 /// Screen-reader description of a bar: the numbers and the pace, so the bar's
 /// meaning survives without colour or shape.
 String varianceSemanticLabel(VarianceLine line, {required String currency}) {
-  final actual = formatMoney(line.actualMinor, symbol: currency);
+  final actual = formatMoney(line.actualMinor, currency: currency);
   if (!line.hasPlan) return '$actual, nothing planned';
-  final planned = formatMoney(line.plannedMinor, symbol: currency);
+  final planned = formatMoney(line.plannedMinor, currency: currency);
   final percentElapsed = (line.monthProgress * 100).round();
   return '$actual of $planned planned, $percentElapsed% of the month elapsed';
 }

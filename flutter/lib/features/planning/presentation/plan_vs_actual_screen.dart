@@ -206,7 +206,7 @@ class _IncomeSourceRow extends StatelessWidget {
             child: Text(source.label, style: theme.textTheme.titleMedium),
           ),
           Text(
-            '+${formatMoney(source.actualMinor, symbol: currency)}',
+            '+${formatMoney(source.actualMinor, currency: currency)}',
             style: theme.textTheme.titleMedium?.copyWith(
               color: colorScheme.secondary,
             ),
@@ -235,7 +235,7 @@ class _IncomeSourceRow extends StatelessWidget {
             ),
           ),
           Text(
-            formatMoney(source.expectedMinor, symbol: currency),
+            formatMoney(source.expectedMinor, currency: currency),
             style: theme.textTheme.titleMedium?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),

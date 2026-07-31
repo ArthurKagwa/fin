@@ -120,7 +120,7 @@ class _AllTimeSummary extends StatelessWidget {
         Text(
           summary.deductionsTotalMinor > 0
               ? '$ratePercent%'
-              : formatMoney(summary.takeHomeTotalMinor, symbol: currency),
+              : formatMoney(summary.takeHomeTotalMinor, currency: currency),
           style: theme.textTheme.displaySmall,
         ),
         const SizedBox(height: 4),
@@ -142,9 +142,9 @@ class _AllTimeSummary extends StatelessWidget {
           secondaryColor: colorScheme.error.withValues(alpha: 0.55),
           height: 10,
           semanticLabel:
-              '${formatMoney(summary.takeHomeTotalMinor, symbol: currency)} take-home, '
-              '${formatMoney(summary.deductionsTotalMinor, symbol: currency)} deducted, '
-              'from ${formatMoney(summary.grossTotalMinor, symbol: currency)} gross',
+              '${formatMoney(summary.takeHomeTotalMinor, currency: currency)} take-home, '
+              '${formatMoney(summary.deductionsTotalMinor, currency: currency)} deducted, '
+              'from ${formatMoney(summary.grossTotalMinor, currency: currency)} gross',
         ),
         const SizedBox(height: 12),
         Row(
@@ -152,13 +152,13 @@ class _AllTimeSummary extends StatelessWidget {
             _Legend(
               color: colorScheme.secondary,
               label: 'Take-home',
-              value: formatMoney(summary.takeHomeTotalMinor, symbol: currency),
+              value: formatMoney(summary.takeHomeTotalMinor, currency: currency),
             ),
             const SizedBox(width: 20),
             _Legend(
               color: colorScheme.error.withValues(alpha: 0.55),
               label: 'Deductions',
-              value: formatMoney(summary.deductionsTotalMinor, symbol: currency),
+              value: formatMoney(summary.deductionsTotalMinor, currency: currency),
             ),
           ],
         ),
@@ -174,7 +174,7 @@ class _AllTimeSummary extends StatelessWidget {
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  '${formatMoney(change.abs(), symbol: currency)} '
+                  '${formatMoney(change.abs(), currency: currency)} '
                   '${change >= 0 ? 'more' : 'less'} take-home than the month before',
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: change >= 0 ? colorScheme.secondary : colorScheme.error,
@@ -219,7 +219,7 @@ class _DeductionLine extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Text(
-          formatMoney(deduction.amountMinor, symbol: currency),
+          formatMoney(deduction.amountMinor, currency: currency),
           style: theme.textTheme.titleSmall,
         ),
       ],
@@ -257,7 +257,7 @@ class _MonthCard extends StatelessWidget {
                       ),
                       Text(
                         month.hasDeductions
-                            ? '${formatMoney(month.grossMinor, symbol: currency)} gross'
+                            ? '${formatMoney(month.grossMinor, currency: currency)} gross'
                             : 'No deductions recorded',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
@@ -270,7 +270,7 @@ class _MonthCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      formatMoney(month.takeHomeMinor, symbol: currency),
+                      formatMoney(month.takeHomeMinor, currency: currency),
                       style: theme.textTheme.titleMedium?.copyWith(
                         color: colorScheme.secondary,
                       ),
@@ -300,7 +300,7 @@ class _MonthCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 '${(month.deductionRate * 100).round()}% deducted '
-                '(${formatMoney(month.deductionsMinor, symbol: currency)})',
+                '(${formatMoney(month.deductionsMinor, currency: currency)})',
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -325,7 +325,7 @@ class _MonthCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      formatMoney(deduction.amountMinor, symbol: currency),
+                      formatMoney(deduction.amountMinor, currency: currency),
                       style: theme.textTheme.labelMedium,
                     ),
                   ],

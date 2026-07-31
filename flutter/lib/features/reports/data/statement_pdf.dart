@@ -117,7 +117,7 @@ pw.Widget _header(MonthlyStatement statement) {
             ),
             pw.SizedBox(height: 4),
             pw.Text(
-              'Generated ${_formatDate(statement.generatedAt)}',
+              'Generated ${formatDate(statement.generatedAt)}',
               style: const pw.TextStyle(fontSize: 9, color: _muted),
             ),
             pw.Text(
@@ -187,17 +187,17 @@ pw.Widget _summaryBlock(MonthlyStatement statement) {
           children: [
             _bigStat(
               label: leftToSpend < 0 ? 'Over plan by' : 'Left to spend',
-              value: formatMoney(leftToSpend.abs(), symbol: currency),
+              value: formatMoney(leftToSpend.abs(), currency: currency),
               color: leftToSpend < 0 ? _terracotta : _ink,
             ),
             _bigStat(
               label: 'Received',
-              value: formatMoney(report.income.actualMinor, symbol: currency),
+              value: formatMoney(report.income.actualMinor, currency: currency),
               color: _green,
             ),
             _bigStat(
               label: 'Spent',
-              value: formatMoney(report.spend.actualMinor, symbol: currency),
+              value: formatMoney(report.spend.actualMinor, currency: currency),
               color: _ink,
             ),
           ],
@@ -206,23 +206,23 @@ pw.Widget _summaryBlock(MonthlyStatement statement) {
       pw.SizedBox(height: 14),
       _statRow(
         'Expected income',
-        formatMoney(report.income.plannedMinor, symbol: currency),
+        formatMoney(report.income.plannedMinor, currency: currency),
       ),
       _statRow(
         'Income received',
-        formatMoney(report.income.actualMinor, symbol: currency),
+        formatMoney(report.income.actualMinor, currency: currency),
       ),
       _statRow(
         'Planned spend',
-        formatMoney(report.spend.plannedMinor, symbol: currency),
+        formatMoney(report.spend.plannedMinor, currency: currency),
       ),
       _statRow(
         'Actual spend',
-        formatMoney(report.spend.actualMinor, symbol: currency),
+        formatMoney(report.spend.actualMinor, currency: currency),
       ),
       _statRow(
         'Net cash',
-        formatMoney(report.netCashMinor, symbol: currency),
+        formatMoney(report.netCashMinor, currency: currency),
         emphasise: true,
       ),
       if (!report.plan.isSnapshot) ...[
@@ -353,8 +353,8 @@ pw.Widget _incomeSourceTable(PlanVsActual report, String currency) {
             source.label,
             source.isUnplanned
                 ? '-'
-                : formatMoney(source.expectedMinor, symbol: currency),
-            formatMoney(source.actualMinor, symbol: currency),
+                : formatMoney(source.expectedMinor, currency: currency),
+            formatMoney(source.actualMinor, currency: currency),
             source.isUnplanned
                 ? '-'
                 : _signed(source.varianceMinor, currency),
@@ -384,13 +384,13 @@ pw.Widget _incomeEventTable(MonthlyStatement statement) {
       for (final event in events)
         _tableRow(
           [
-            _formatDate(event.occurredOn),
+            formatDate(event.occurredOn),
             event.source,
-            formatMoney(event.grossMinor ?? event.amountMinor, symbol: currency),
+            formatMoney(event.grossMinor ?? event.amountMinor, currency: currency),
             event.deductionsTotalMinor == 0
                 ? '-'
-                : formatMoney(event.deductionsTotalMinor, symbol: currency),
-            formatMoney(event.amountMinor, symbol: currency),
+                : formatMoney(event.deductionsTotalMinor, currency: currency),
+            formatMoney(event.amountMinor, currency: currency),
           ],
           flexes,
           lastCellColor: _green,
@@ -412,8 +412,8 @@ pw.Widget _bucketTable(MonthlyStatement statement) {
             line.bucket.name,
             line.plannedMinor == 0
                 ? '-'
-                : formatMoney(line.plannedMinor, symbol: currency),
-            formatMoney(line.actualMinor, symbol: currency),
+                : formatMoney(line.plannedMinor, currency: currency),
+            formatMoney(line.actualMinor, currency: currency),
             line.plannedMinor == 0
                 ? '-'
                 : _signed(-line.varianceMinor, currency),
@@ -429,8 +429,8 @@ pw.Widget _bucketTable(MonthlyStatement statement) {
       _tableRow(
         [
           'Total',
-          formatMoney(statement.report.spend.plannedMinor, symbol: currency),
-          formatMoney(statement.report.spend.actualMinor, symbol: currency),
+          formatMoney(statement.report.spend.plannedMinor, currency: currency),
+          formatMoney(statement.report.spend.actualMinor, currency: currency),
           _signed(-statement.report.spend.varianceMinor, currency),
         ],
         flexes,
@@ -451,10 +451,10 @@ pw.Widget _transactionTable(MonthlyStatement statement) {
       for (final expense in statement.expensesInDateOrder)
         _tableRow(
           [
-            _formatDate(expense.occurredOn),
+            formatDate(expense.occurredOn),
             expense.payee ?? '-',
             statement.bucketName(expense.bucketId),
-            formatMoney(expense.amountMinor, symbol: currency),
+            formatMoney(expense.amountMinor, currency: currency),
           ],
           flexes,
         ),
@@ -463,17 +463,8 @@ pw.Widget _transactionTable(MonthlyStatement statement) {
 }
 
 String _signed(int amountMinor, String currency) {
-  final formatted = formatMoney(amountMinor.abs(), symbol: currency);
+  final formatted = formatMoney(amountMinor.abs(), currency: currency);
   if (amountMinor == 0) return formatted;
   return amountMinor > 0 ? '+$formatted' : '-$formatted';
 }
 
-/// `17 Jul 2026`. Kept ASCII-only: the default Helvetica the package embeds
-/// covers Latin-1, and a stray typographic character would render as a blank.
-String _formatDate(DateTime date) {
-  const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-  return '${date.day} ${months[date.month - 1]} ${date.year}';
-}
