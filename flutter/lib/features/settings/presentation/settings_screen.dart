@@ -1,7 +1,9 @@
 import 'package:fintrack/features/auth/data/auth_repository.dart';
+import 'package:fintrack/features/planning/presentation/plan_controller.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -11,6 +13,7 @@ class SettingsScreen extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final email = ref.watch(authStateProvider).asData?.value?.email ?? '';
     final currency = ref.watch(currencyCodeProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('More', style: Theme.of(context).textTheme.headlineMedium),
@@ -18,56 +21,77 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
         children: [
-          _SectionLabel('Records'),
+          const _SectionLabel('Records'),
           _SettingsCard(
             children: [
+              _SettingsRow(
+                icon: Icons.receipt_long_outlined,
+                title: 'Transactions',
+                subtitle: 'Every expense, by month',
+                onTap: () => context.push('/transactions'),
+              ),
+              _SettingsRow(
+                // Reachable only from the empty dashboard before this, so the
+                // list became unreachable the moment you made a bucket.
+                icon: Icons.folder_outlined,
+                title: 'Buckets',
+                subtitle: 'Create, edit and set planned amounts',
+                onTap: () => context.push('/buckets'),
+              ),
               _SettingsRow(
                 icon: Icons.history,
                 title: 'History',
                 subtitle: 'Browse past months',
-                onTap: () {},
-              ),
-              _SettingsRow(
-                icon: Icons.upload_file_outlined,
-                title: 'Import',
-                subtitle: 'Bring in a CSV of past transactions',
-                onTap: () {},
-              ),
-              _SettingsRow(
-                icon: Icons.download_outlined,
-                title: 'Export',
-                subtitle: 'Download your data as a CSV',
-                onTap: () {},
+                onTap: () {
+                  // Opens the plan-vs-actual report on the current month; its
+                  // picker is how past months are reached.
+                  ref
+                      .read(selectedPlanMonthProvider.notifier)
+                      .select(DateTime.now());
+                  context.push('/plan');
+                },
               ),
               _SettingsRow(
                 icon: Icons.bar_chart_outlined,
                 title: 'Earnings report',
                 subtitle: 'Gross vs. take-home by month',
-                onTap: () {},
+                onTap: () => context.push('/earnings'),
+              ),
+              _SettingsRow(
+                icon: Icons.picture_as_pdf_outlined,
+                title: 'Export',
+                subtitle: 'Share a month as a PDF statement',
+                onTap: () => context.push('/export'),
+              ),
+              const _SettingsRow(
+                icon: Icons.upload_file_outlined,
+                title: 'Import',
+                subtitle: 'Bring in a CSV of past transactions',
+                enabled: false,
               ),
             ],
           ),
           const SizedBox(height: 24),
-          _SectionLabel('Preferences'),
+          const _SectionLabel('Preferences'),
           _SettingsCard(
             children: [
               _SettingsRow(
+                icon: Icons.account_circle_outlined,
+                title: 'Account',
+                subtitle: email.isEmpty ? currency : '$email · $currency',
+                onTap: () => context.push('/account'),
+              ),
+              const _SettingsRow(
                 icon: Icons.notifications_outlined,
                 title: 'Evening reminder',
                 subtitle: 'Set a time to log the day',
-                onTap: () {},
+                enabled: false,
               ),
-              _SettingsRow(
-                icon: Icons.account_circle_outlined,
-                title: 'Account',
-                subtitle: '$email · $currency',
-                onTap: () {},
-              ),
-              _SettingsRow(
+              const _SettingsRow(
                 icon: Icons.workspace_premium_outlined,
                 title: 'Plan & billing',
-                subtitle: 'Trial ends in 62 days',
-                onTap: () {},
+                subtitle: 'Manage your subscription',
+                enabled: false,
               ),
             ],
           ),
@@ -79,13 +103,40 @@ class SettingsScreen extends ConsumerWidget {
                 title: 'Sign out',
                 iconColor: colorScheme.error,
                 titleColor: colorScheme.error,
-                onTap: () => ref.read(authRepositoryProvider).signOut(),
+                showChevron: false,
+                onTap: () => _confirmSignOut(context, ref),
               ),
             ],
           ),
         ],
       ),
     );
+  }
+}
+
+Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Sign out?'),
+      content: const Text(
+        'Your data stays saved to your account. You will need to sign in again '
+        'to log anything new.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Sign out'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed ?? false) {
+    await ref.read(authRepositoryProvider).signOut();
   }
 }
 
@@ -136,31 +187,79 @@ class _SettingsRow extends StatelessWidget {
   const _SettingsRow({
     required this.icon,
     required this.title,
-    required this.onTap,
+    this.onTap,
     this.subtitle,
     this.iconColor,
     this.titleColor,
+    this.enabled = true,
+    this.showChevron = true,
   });
 
   final IconData icon;
   final String title;
   final String? subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Color? iconColor;
   final Color? titleColor;
 
+  /// False for features that exist on the roadmap but not in the app. The row
+  /// stays visible and legible but is plainly inert — a row that silently does
+  /// nothing when tapped reads as a bug, not as "not built yet".
+  final bool enabled;
+
+  final bool showChevron;
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final dim = colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
+
     return ListTile(
-      leading: Icon(icon, color: iconColor ?? colorScheme.onSurfaceVariant),
+      enabled: enabled,
+      leading: Icon(
+        icon,
+        color: enabled ? (iconColor ?? colorScheme.onSurfaceVariant) : dim,
+      ),
       title: Text(
         title,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: titleColor),
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: enabled ? titleColor : dim,
+        ),
       ),
-      subtitle: subtitle == null ? null : Text(subtitle!),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: onTap,
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle!,
+              style: enabled ? null : theme.textTheme.bodySmall?.copyWith(color: dim),
+            ),
+      trailing: enabled
+          ? (showChevron ? const Icon(Icons.chevron_right) : null)
+          : const _ComingSoonTag(),
+      onTap: enabled ? onTap : null,
+    );
+  }
+}
+
+class _ComingSoonTag extends StatelessWidget {
+  const _ComingSoonTag();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        'Coming soon',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+        ),
+      ),
     );
   }
 }

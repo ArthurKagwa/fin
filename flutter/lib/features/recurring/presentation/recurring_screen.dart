@@ -1,11 +1,11 @@
 import 'package:fintrack/core/utils/money.dart';
-import 'package:fintrack/features/buckets/data/bucket_repository.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
 import 'package:fintrack/features/recurring/application/recurring_payment.dart';
 import 'package:fintrack/features/recurring/data/recurring_repository.dart';
 import 'package:fintrack/features/recurring/presentation/recurring_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 class RecurringScreen extends ConsumerWidget {
   const RecurringScreen({super.key});
@@ -72,7 +72,7 @@ class RecurringScreen extends ConsumerWidget {
                 children: [
                   Text('All recurring', style: Theme.of(context).textTheme.titleLarge),
                   TextButton.icon(
-                    onPressed: () => _showCreateDialog(context, ref),
+                    onPressed: () => context.push('/recurring/new'),
                     icon: const Icon(Icons.add, size: 18),
                     label: const Text('Add'),
                   ),
@@ -83,7 +83,8 @@ class RecurringScreen extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Text(
-                    'No recurring payments yet.',
+                    'No recurring payments yet — add rent, subscriptions or '
+                    'school fees and they show up here before they land.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
@@ -98,117 +99,8 @@ class RecurringScreen extends ConsumerWidget {
     );
   }
 
-  void _showCreateDialog(BuildContext context, WidgetRef ref) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => const _CreateRecurringDialog(),
-    );
-  }
 }
 
-class _CreateRecurringDialog extends ConsumerStatefulWidget {
-  const _CreateRecurringDialog();
-
-  @override
-  ConsumerState<_CreateRecurringDialog> createState() => _CreateRecurringDialogState();
-}
-
-class _CreateRecurringDialogState extends ConsumerState<_CreateRecurringDialog> {
-  final _nameController = TextEditingController();
-  final _amountController = TextEditingController();
-  String? _bucketId;
-  RecurringFrequency _frequency = RecurringFrequency.monthly;
-  final DateTime _startOn = DateTime.now();
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _amountController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bucketsAsync = ref.watch(activeBucketsProvider);
-
-    return AlertDialog(
-      title: const Text('New recurring payment'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: _nameController,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Name'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Amount'),
-            ),
-            const SizedBox(height: 12),
-            bucketsAsync.when(
-              loading: () => const LinearProgressIndicator(),
-              error: (error, _) => Text('Could not load buckets: $error'),
-              data: (buckets) {
-                if (_bucketId == null && buckets.isNotEmpty) {
-                  _bucketId = buckets.first.id;
-                }
-                return DropdownButtonFormField<String>(
-                  initialValue: _bucketId,
-                  decoration: const InputDecoration(labelText: 'Bucket'),
-                  items: [
-                    for (final bucket in buckets)
-                      DropdownMenuItem(value: bucket.id, child: Text(bucket.name)),
-                  ],
-                  onChanged: (value) => setState(() => _bucketId = value),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<RecurringFrequency>(
-              initialValue: _frequency,
-              decoration: const InputDecoration(labelText: 'Frequency'),
-              items: const [
-                DropdownMenuItem(value: RecurringFrequency.daily, child: Text('Daily')),
-                DropdownMenuItem(value: RecurringFrequency.weekly, child: Text('Weekly')),
-                DropdownMenuItem(value: RecurringFrequency.biweekly, child: Text('Every 2 weeks')),
-                DropdownMenuItem(value: RecurringFrequency.monthly, child: Text('Monthly')),
-                DropdownMenuItem(value: RecurringFrequency.yearly, child: Text('Yearly')),
-              ],
-              onChanged: (value) => setState(() => _frequency = value ?? _frequency),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () {
-            final name = _nameController.text.trim();
-            final amount = int.tryParse(_amountController.text.replaceAll(',', ''));
-            if (name.isEmpty || amount == null || amount <= 0 || _bucketId == null) return;
-            ref.read(recurringControllerProvider.notifier).create(
-                  name: name,
-                  bucketId: _bucketId!,
-                  frequency: _frequency,
-                  amountMinor: amount,
-                  startOn: _startOn,
-                );
-            Navigator.of(context).pop();
-          },
-          child: const Text('Create'),
-        ),
-      ],
-    );
-  }
-}
 
 class _OccurrenceRow extends ConsumerWidget {
   const _OccurrenceRow({required this.occurrence, required this.payment});
@@ -255,7 +147,7 @@ class _OccurrenceRow extends ConsumerWidget {
                     ],
                   ),
                   Text(
-                    '${formatMoney(occurrence.expectedMinor, symbol: currency)} · due ${relativeDate(occurrence.dueOn)}',
+                    '${formatMoney(occurrence.expectedMinor, currency: currency)} · due ${relativeDate(occurrence.dueOn)}',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
@@ -298,7 +190,7 @@ class _RecurringRow extends ConsumerWidget {
       title: Text(payment.name),
       subtitle: Text(_frequencyLabel(payment.frequency)),
       trailing: Text(
-        formatMoney(payment.currentAmountMinor, symbol: currency),
+        formatMoney(payment.currentAmountMinor, currency: currency),
         style: Theme.of(context).textTheme.titleSmall,
       ),
     );

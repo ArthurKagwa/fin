@@ -95,3 +95,81 @@ final class IncomeEventsProvider
 }
 
 String _$incomeEventsHash() => r'2fa3fe464cd41161db37a31d00f0480fb9ababc7';
+
+@ProviderFor(incomeEventsForMonth)
+final incomeEventsForMonthProvider = IncomeEventsForMonthFamily._();
+
+final class IncomeEventsForMonthProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<IncomeEvent>>,
+          List<IncomeEvent>,
+          Stream<List<IncomeEvent>>
+        >
+    with
+        $FutureModifier<List<IncomeEvent>>,
+        $StreamProvider<List<IncomeEvent>> {
+  IncomeEventsForMonthProvider._({
+    required IncomeEventsForMonthFamily super.from,
+    required DateTime super.argument,
+  }) : super(
+         retry: null,
+         name: r'incomeEventsForMonthProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$incomeEventsForMonthHash();
+
+  @override
+  String toString() {
+    return r'incomeEventsForMonthProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $StreamProviderElement<List<IncomeEvent>> $createElement(
+    $ProviderPointer pointer,
+  ) => $StreamProviderElement(pointer);
+
+  @override
+  Stream<List<IncomeEvent>> create(Ref ref) {
+    final argument = this.argument as DateTime;
+    return incomeEventsForMonth(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is IncomeEventsForMonthProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$incomeEventsForMonthHash() =>
+    r'0f4c1a7b9d2e5836a1c04be7f39d5c2a8b61e074';
+
+final class IncomeEventsForMonthFamily extends $Family
+    with $FunctionalFamilyOverride<Stream<List<IncomeEvent>>, DateTime> {
+  IncomeEventsForMonthFamily._()
+    : super(
+        retry: null,
+        name: r'incomeEventsForMonthProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  IncomeEventsForMonthProvider call(DateTime month) =>
+      IncomeEventsForMonthProvider._(argument: month, from: this);
+
+  @override
+  String toString() => r'incomeEventsForMonthProvider';
+}

@@ -45,7 +45,7 @@ class IncomeListScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        formatMoney(totalThisMonth, symbol: currency),
+                        formatMoney(totalThisMonth, currency: currency),
                         style: Theme.of(context).textTheme.displaySmall,
                       ),
                     ],
@@ -136,7 +136,7 @@ class _IncomeRow extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '+${formatMoney(event.amountMinor, symbol: currency)}',
+                  '+${formatMoney(event.amountMinor, currency: currency)}',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: colorScheme.secondary,
                       ),
@@ -150,14 +150,14 @@ class _IncomeRow extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _MiniStat(label: 'Gross', value: formatMoney(event.grossMinor!, symbol: currency)),
+                  _MiniStat(label: 'Gross', value: formatMoney(event.grossMinor!, currency: currency)),
                   _MiniStat(
                     label: 'Deductions',
-                    value: formatMoney(event.deductionsTotalMinor, symbol: currency),
+                    value: formatMoney(event.deductionsTotalMinor, currency: currency),
                   ),
                   _MiniStat(
                     label: 'Take-home',
-                    value: formatMoney(event.amountMinor, symbol: currency),
+                    value: formatMoney(event.amountMinor, currency: currency),
                   ),
                 ],
               ),

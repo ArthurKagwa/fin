@@ -1,8 +1,13 @@
 import 'package:fintrack/core/utils/money.dart';
-import 'package:fintrack/features/dashboard/application/dashboard_summary.dart';
-import 'package:fintrack/features/dashboard/data/dashboard_repository.dart';
 import 'package:fintrack/features/expenses/application/expense.dart';
 import 'package:fintrack/features/expenses/data/expense_repository.dart';
+import 'package:fintrack/features/planning/application/monthly_plan.dart';
+import 'package:fintrack/features/planning/application/plan_vs_actual.dart';
+import 'package:fintrack/features/planning/data/plan_repository.dart';
+import 'package:fintrack/features/planning/presentation/plan_controller.dart';
+import 'package:fintrack/features/planning/presentation/widgets/bullet_bar.dart';
+import 'package:fintrack/features/planning/presentation/widgets/plan_summary.dart';
+import 'package:fintrack/features/planning/presentation/widgets/variance_style.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
 import 'package:fintrack/features/recurring/application/recurring_payment.dart';
 import 'package:fintrack/features/recurring/data/recurring_repository.dart';
@@ -10,25 +15,47 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final summaryAsync = ref.watch(dashboardSummaryProvider);
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Freeze this month's plan the first time the dashboard opens, so a later
+    // edit to a bucket's default can't rewrite what was planned for it.
+    // Deliberately not awaited: the report falls back to bucket defaults if
+    // this fails, so it must never gate the screen.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(planControllerProvider.notifier).ensureCurrentMonth();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reportAsync =
+        ref.watch(planVsActualProvider(normaliseMonth(DateTime.now())));
 
     return Scaffold(
       appBar: AppBar(
         title: Text('Home', style: Theme.of(context).textTheme.headlineMedium),
       ),
-      body: summaryAsync.when(
+      body: reportAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Could not load your dashboard: $error')),
-        data: (summary) {
-          if (summary.buckets.isEmpty) {
-            return _EmptyDashboard(onCreateBucket: () => context.push('/buckets'));
+        error: (error, _) =>
+            Center(child: Text('Could not load your dashboard: $error')),
+        data: (report) {
+          if (report.buckets.isEmpty) {
+            return _EmptyDashboard(
+              onCreateBucket: () => context.push('/buckets'),
+            );
           }
-          return _DashboardBody(summary: summary);
+          return _DashboardBody(report: report);
         },
       ),
     );
@@ -68,28 +95,30 @@ class _EmptyDashboard extends StatelessWidget {
 }
 
 class _DashboardBody extends ConsumerWidget {
-  const _DashboardBody({required this.summary});
+  const _DashboardBody({required this.report});
 
-  final DashboardSummary summary;
+  final PlanVsActual report;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recentExpensesAsync = ref.watch(recentExpensesProvider);
     final upcomingAsync = ref.watch(upcomingOccurrencesProvider);
 
+    // The report ranks by variance so the biggest miss surfaces first; here the
+    // user's own order wins. Cards that reshuffle every time you log an expense
+    // make the dashboard impossible to build muscle memory for.
+    final bucketsInUserOrder = [...report.buckets]
+      ..sort((a, b) => a.bucket.sortOrder.compareTo(b.bucket.sortOrder));
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
       children: [
-        if (summary.unallocatedMinor > 0) ...[
-          _UnallocatedBanner(amountMinor: summary.unallocatedMinor),
-          const SizedBox(height: 20),
-        ],
-        _PaceHeader(summary: summary),
+        _PlanVsActualCard(report: report),
         const SizedBox(height: 24),
         Text('Buckets', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
-        for (final bucket in summary.buckets) ...[
-          _BucketCard(bucketSummary: bucket),
+        for (final bucket in bucketsInUserOrder) ...[
+          _BucketCard(bucketLine: bucket),
           const SizedBox(height: 12),
         ],
         const SizedBox(height: 12),
@@ -100,7 +129,16 @@ class _DashboardBody extends ConsumerWidget {
               occurrences.isEmpty ? const SizedBox.shrink() : _UpcomingCard(occurrences: occurrences),
         ),
         const SizedBox(height: 24),
-        Text('Recent entries', style: Theme.of(context).textTheme.titleLarge),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Recent entries', style: Theme.of(context).textTheme.titleLarge),
+            TextButton(
+              onPressed: () => context.push('/transactions'),
+              child: const Text('See all'),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         recentExpensesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -139,114 +177,77 @@ class _DashboardBody extends ConsumerWidget {
   }
 
   String _bucketName(String bucketId) {
-    for (final b in summary.buckets) {
+    for (final b in report.buckets) {
       if (b.bucket.id == bucketId) return b.bucket.name;
     }
     return 'Unknown bucket';
   }
 }
 
-class _UnallocatedBanner extends ConsumerWidget {
-  const _UnallocatedBanner({required this.amountMinor});
+/// The "am I OK this month?" card. Tapping through answers "where is it going
+/// wrong?" on the full report.
+class _PlanVsActualCard extends ConsumerWidget {
+  const _PlanVsActualCard({required this.report});
 
-  final int amountMinor;
+  final PlanVsActual report;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final currency = ref.watch(currencyCodeProvider);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.savings_outlined, color: colorScheme.secondary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              '${formatMoney(amountMinor, symbol: currency)} not yet given a job — allocate',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-          Icon(Icons.chevron_right, color: colorScheme.secondary),
-        ],
-      ),
-    );
-  }
-}
 
-class _PaceHeader extends StatelessWidget {
-  const _PaceHeader({required this.summary});
-
-  final DashboardSummary summary;
-
-  @override
-  Widget build(BuildContext context) {
-    final percentElapsed = (summary.monthProgress * 100).round();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Day ${summary.daysElapsed} of ${summary.daysInMonth}',
-          style: Theme.of(context).textTheme.displaySmall,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '$percentElapsed% of the month gone',
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          ref.read(selectedPlanMonthProvider.notifier).select(report.month);
+          context.push('/plan');
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              PlanSummary(report: report, currency: currency),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text(
+                    report.hasPlan ? 'See the full picture' : 'Set your plan',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: colorScheme.primary,
+                        ),
+                  ),
+                  Icon(Icons.chevron_right, size: 18, color: colorScheme.primary),
+                ],
               ),
-        ),
-        const SizedBox(height: 12),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: summary.monthProgress.clamp(0, 1),
-            minHeight: 6,
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-            valueColor: AlwaysStoppedAnimation(Theme.of(context).colorScheme.primary),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
 
 class _BucketCard extends ConsumerWidget {
-  const _BucketCard({required this.bucketSummary});
+  const _BucketCard({required this.bucketLine});
 
-  final BucketSummary bucketSummary;
+  final BucketVarianceLine bucketLine;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final currency = ref.watch(currencyCodeProvider);
-    final planned = bucketSummary.plannedMinor;
-    final spentRatio = planned > 0 ? bucketSummary.spentThisMonthMinor / planned : 0.0;
-    final isOverspent = bucketSummary.balanceMinor < 0;
-
-    final Color paceColor;
-    final String paceLabel;
-    if (isOverspent) {
-      paceColor = colorScheme.error;
-      paceLabel = 'Overspent';
-    } else if (spentRatio > 0.85) {
-      paceColor = const Color(0xFFB8860B);
-      paceLabel = 'Near limit';
-    } else {
-      paceColor = colorScheme.secondary;
-      paceLabel = 'On track';
-    }
-
-    final goalMinor = bucketSummary.bucket.goalMinor;
+    final line = bucketLine.line;
+    final style = varianceStyleFor(context, line, currency: currency);
+    final remainingMinor = line.plannedMinor - line.actualMinor;
+    final isOverspent = remainingMinor < 0;
+    final goalMinor = bucketLine.bucket.goalMinor;
 
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => context.push('/buckets/${bucketSummary.bucket.id}'),
+        onTap: () => context.push('/buckets/${bucketLine.bucket.id}'),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -260,12 +261,12 @@ class _BucketCard extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          bucketSummary.bucket.name,
+                          bucketLine.bucket.name,
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${formatMoney(bucketSummary.spentThisMonthMinor, symbol: currency)} spent of ${formatMoney(planned, symbol: currency)}',
+                          '${formatMoney(line.actualMinor, currency: currency)} spent of ${formatMoney(line.plannedMinor, currency: currency)}',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: colorScheme.onSurfaceVariant,
                               ),
@@ -277,7 +278,7 @@ class _BucketCard extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        formatMoney(bucketSummary.balanceMinor, symbol: currency),
+                        formatMoney(remainingMinor, currency: currency),
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               color: isOverspent ? colorScheme.error : colorScheme.onSurface,
                             ),
@@ -293,27 +294,27 @@ class _BucketCard extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: spentRatio.clamp(0, 1),
-                  minHeight: 6,
-                  backgroundColor: colorScheme.surfaceContainerHigh,
-                  valueColor: AlwaysStoppedAnimation(paceColor),
-                ),
+              BulletBar(
+                plannedMinor: line.plannedMinor,
+                actualMinor: line.actualMinor,
+                fillColor: style.color,
+                paceMarker: line.monthProgress,
+                height: 6,
+                semanticLabel: varianceSemanticLabel(line, currency: currency),
               ),
               const SizedBox(height: 6),
               Row(
                 children: [
-                  Icon(
-                    isOverspent ? Icons.error_outline : Icons.check_circle_outline,
-                    size: 14,
-                    color: paceColor,
-                  ),
+                  Icon(style.icon, size: 14, color: style.color),
                   const SizedBox(width: 4),
-                  Text(
-                    paceLabel,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(color: paceColor),
+                  Expanded(
+                    child: Text(
+                      style.label,
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelMedium
+                          ?.copyWith(color: style.color),
+                    ),
                   ),
                 ],
               ),
@@ -325,16 +326,12 @@ class _BucketCard extends ConsumerWidget {
                   children: [
                     Icon(Icons.flag_outlined, size: 16, color: colorScheme.secondary),
                     const SizedBox(width: 6),
+                    // Progress towards a goal needs carried-over balances, which
+                    // arrive with allocation (FR-08). Showing a hardcoded 0% on
+                    // every goal forever was worse than showing none.
                     Text(
-                      'Goal: ${formatMoney(goalMinor, symbol: currency)}',
+                      'Goal: ${formatMoney(goalMinor, currency: currency)}',
                       style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                    const Spacer(),
-                    Text(
-                      '${((bucketSummary.carriedOverMinor / goalMinor) * 100).clamp(0, 100).round()}%',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: colorScheme.secondary,
-                          ),
                     ),
                   ],
                 ),
@@ -358,31 +355,37 @@ class _UpcomingCard extends ConsumerWidget {
     final currency = ref.watch(currencyCodeProvider);
     final total = occurrences.fold<int>(0, (sum, o) => sum + o.expectedMinor);
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(Icons.event_repeat_outlined, color: colorScheme.primary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${occurrences.length} charges in the next 14 days',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  Text(
-                    'Totaling ${formatMoney(total, symbol: currency)}',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
+      clipBehavior: Clip.antiAlias,
+      // The chevron was here before the tap was. An affordance that does
+      // nothing reads as a broken app, not as a decoration.
+      child: InkWell(
+        onTap: () => context.go('/recurring'),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(Icons.event_repeat_outlined, color: colorScheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${occurrences.length} charges in the next 14 days',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    Text(
+                      'Totaling ${formatMoney(total, currency: currency)}',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
-          ],
+              Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
+            ],
+          ),
         ),
       ),
     );
@@ -408,7 +411,7 @@ class _ExpenseRow extends ConsumerWidget {
       title: Text(expense.payee ?? bucketName),
       subtitle: Text('$bucketName · ${relativeDate(expense.occurredOn)}'),
       trailing: Text(
-        '-${formatMoney(expense.amountMinor, symbol: currency)}',
+        '-${formatMoney(expense.amountMinor, currency: currency)}',
         style: Theme.of(context).textTheme.titleSmall,
       ),
     );

@@ -63,13 +63,13 @@ class _BucketDetailBody extends ConsumerWidget {
               children: [
                 _DetailRow(
                   label: 'Planned amount',
-                  value: formatMoney(bucket.plannedMinor ?? 0, symbol: currency),
+                  value: formatMoney(bucket.plannedMinor ?? 0, currency: currency),
                 ),
                 if (bucket.goalMinor != null) ...[
                   const SizedBox(height: 12),
                   _DetailRow(
                     label: 'Goal',
-                    value: formatMoney(bucket.goalMinor!, symbol: currency),
+                    value: formatMoney(bucket.goalMinor!, currency: currency),
                   ),
                 ],
               ],
