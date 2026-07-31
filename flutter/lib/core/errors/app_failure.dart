@@ -23,3 +23,8 @@ final class PermissionFailure extends AppFailure {
 final class NotFoundFailure extends AppFailure {
   const NotFoundFailure(super.message);
 }
+
+/// Rendering or sharing an exported document failed.
+final class ExportFailure extends AppFailure {
+  const ExportFailure(super.message);
+}

@@ -17,7 +17,8 @@ _Last updated: 2026-07-30_
 | FR-12 | Dashboard: bucket status + pace | Done | `flutter/lib/features/planning/` | Pace-adjusted three-state ladder (on track / off pace / off plan) on the summary card and every bucket card |
 | FR-17 | Planned vs actual income and spend | Done | `flutter/lib/features/planning/` | Expected income sources + per-bucket planned spend, snapshotted per month; dashboard card plus `/plan` report with month picker |
 | FR-13 | Upcoming recurring charges | Not started | — | |
-| FR-14 | CSV import with mapping + dedup | Not started | — | |
+| FR-14 | CSV import with mapping + dedup | Not started | — | Surfaced in Settings as a disabled "Coming soon" row |
+| FR-18 | Export a month as a PDF statement | Done | `flutter/lib/features/reports/` | Summary, money in by source, spend by bucket and every transaction; shared via the platform sheet |
 | FR-15 | 3-month trial, then freemium gate | Not started | — | |
 | FR-16 | Freemium limits (5 buckets, 3 recurring) | Not started | — | |
 | US-01 | Signup: email + password, currency confirmation | Not started | — | |
@@ -37,7 +38,8 @@ _Last updated: 2026-07-30_
 | US-20 | Bucket planning + goals | Not started | — | |
 | US-21 | Paycheque deductions | Not started | — | |
 | US-22 | Deduction prefill from prior paycheque | Not started | — | |
-| US-23 | Earnings report (gross vs take-home) | Not started | — | |
+| US-23 | Earnings report (gross vs take-home) | Done | `flutter/lib/features/earnings/` | Leads with the effective deduction rate, weighted by gross; per-month split and a breakdown of what takes it |
+| US-26 | Account details | Done | `flutter/lib/features/profile/presentation/account_screen.dart` | Email + verification state, currency, timezone, member since, sign-out with confirmation |
 
 ## Scaffold (done)
 - [x] `flutter create` with package `com.arthurasasira.fintrack`
@@ -73,6 +75,24 @@ _Last updated: 2026-07-30_
   FR-08) and the goal-progress percentage (needs carry-over balances). Both
   should come back with allocation. `dashboard_repository.dart` and
   `dashboard_summary.dart` are untouched and unused, waiting for that work.
+
+## Settings — notes
+
+- Settings was previously a mockup: 8 of its 9 rows had `onTap: () {}` and the
+  "Trial ends in 62 days" subtitle was invented — there are no trial fields in
+  `UserProfile` at all. That line is gone.
+- Rows for features that don't exist yet (Import, Evening reminder, Plan &
+  billing) render disabled with a "Coming soon" tag rather than silently doing
+  nothing, which reads as a bug.
+- Currency is deliberately *not* editable, matching the promise made during
+  onboarding. The account screen says so explicitly so it doesn't read as a
+  missing setting.
+- **New dependencies**: `pdf` and `printing`, for the statement export. They
+  need a `flutter pub get` — `pubspec.lock` could not be regenerated in the
+  environment this was written in.
+- The PDF is built from `pw.Row`/`pw.Column` primitives rather than the
+  package's table helpers, which have moved between major versions. Text is
+  kept ASCII-only so the embedded Helvetica renders every glyph.
 
 ## Open questions
 - **Q-01**: Firebase project not yet created. Run `flutterfire configure` to generate `firebase_options.dart` and `android/app/google-services.json`.

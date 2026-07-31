@@ -10,6 +10,25 @@ String formatMoney(int minorUnits, {required String symbol}) {
   return '$sign$symbol ${buffer.toString()}';
 }
 
+/// "July 2026" — month headings, pickers and statement titles.
+String formatMonth(DateTime month) {
+  const names = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  return '${names[month.month - 1]} ${month.year}';
+}
+
 String relativeDate(DateTime date) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);

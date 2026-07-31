@@ -93,12 +93,3 @@ String varianceSemanticLabel(VarianceLine line, {required String currency}) {
   final percentElapsed = (line.monthProgress * 100).round();
   return '$actual of $planned planned, $percentElapsed% of the month elapsed';
 }
-
-/// "July 2026" — used by the month picker and report headings.
-String formatMonth(DateTime month) {
-  const names = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
-  return '${names[month.month - 1]} ${month.year}';
-}
