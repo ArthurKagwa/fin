@@ -1,178 +1,159 @@
-# FinTrack vs. entry-level budgeting apps — functional evaluation
-_Assessed 2026-07-31 against `lib/` at `claude/flutter-budgeting-benchmarks-bmgbjp`._
+# FinTrack vs. entry-level budgeting apps — re-evaluation
+_Assessed 2026-07-31, after the P0/P1 remediation pass described in
+`implementation-status.md`. Baseline: the original evaluation on `main`
+before that pass, preserved in git history._
 
-## What this measures
+## What this measures (unchanged from the original)
 
-"Entry-level budgeting app utility" here means the functional bar a **manual-entry**
-budgeting app has to clear before a normal person keeps using it past week two.
-The comparison class is the manual/envelope tier — EveryDollar (free), Goodbudget,
-Wallet by BudgetBakers, Spendee, YNAB's core loop — not bank-aggregation products
-like Monarch or Copilot. Bank sync is therefore *not* treated as table stakes;
-CSV import, transaction editing and reminders are, because every app in that class
-ships them.
+Same comparison class as before: manual-entry envelope budgeting apps
+(Goodbudget, EveryDollar, Wallet, Spendee) — not bank-aggregation products.
+Same 12 dimensions, same scoring philosophy: scored against what that class
+ships as table stakes, not against a hypothetical finished FinTrack.
 
-Scores are against that bar, not against a hypothetical finished FinTrack.
+## Scorecard — before → after
 
-## Scorecard
+| # | Dimension | Before | After | What changed |
+|---|-----------|:---:|:---:|---|
+| 1 | Onboarding & time-to-first-value | 3.0 | 3.0 | Untouched this pass — still nothing seeds a first budget |
+| 2 | Expense capture speed | 4.0 | 4.0 | Still meets the ≤4-tap bar; editing existing entries doesn't slow the fast path |
+| 3 | Correction & data integrity | **1.5** | **4.5** | Full edit/delete/restore for expenses, income, and recurring payments, with Undo everywhere and safety guards (can't edit an allocated income event or hard-delete a referenced bucket) |
+| 4 | Budget model completeness | 2.5 | **4.0** | The envelope engine that was missing now exists: real allocation, running bucket balances, true rollover, an unallocated pool |
+| 5 | Recurring & bills | 3.0 | 4.0 | Edit, amount-change history, stop-vs-delete safety, Custom interval, and the date-drift bug are all fixed |
+| 6 | Awareness loop | 2.5 | 3.5 | The evening reminder — the retention lever the original doc called out as the single highest-leverage gap — now exists |
+| 7 | Reporting & insight | 3.0 | 3.5 | Added a 6-month spend trend chart on top of the existing PDF/earnings report |
+| 8 | Getting existing data in | **1.0** | **4.0** | CSV import: pick, map columns, preview with duplicates flagged, commit |
+| 9 | Trust, security, compliance | 2.0 | 3.5 | App Check activated (client-side); account deletion built. App-lock/biometrics still absent |
+| 10 | Platform polish | 2.5 | 3.5 | Dark mode added; the unbounded-query defect fixed. Still English-only |
+| 11 | Retention mechanics | **0.5** | 2.0 | One reminder exists now; still no recap, still no analytics instrumented (`firebase_analytics` remains an unused dependency) |
+| 12 | Monetization | 0.0 | 0.0 | Out of scope this pass — trial/freemium is still spec-only |
 
-| # | Dimension | Score | One-line verdict |
-|---|-----------|:-----:|------------------|
-| 1 | Onboarding & time-to-first-value | 3.0 / 5 | Currency setup is best-in-class; nothing seeds a first budget. |
-| 2 | Expense capture speed | 4.0 / 5 | Meets the ≤4-tap bar with a genuinely good amount field. |
-| 3 | Correction & data integrity | **1.5 / 5** | You cannot edit anything. Income cannot even be deleted. |
-| 4 | Budget model completeness | 2.5 / 5 | Excellent variance reporting on top of a missing envelope engine. |
-| 5 | Recurring & bills | 3.0 / 5 | Registry and confirm→expense work; no edit, no reminders, date-drift bug. |
-| 6 | Awareness loop | 2.5 / 5 | Strong in-app dashboard, zero out-of-app signal. |
-| 7 | Reporting & insight | 3.0 / 5 | PDF statement and earnings report beat the bar; no trends at all. |
-| 8 | Getting existing data in | 1.0 / 5 | No import of any kind. |
-| 9 | Trust, security, compliance | 2.0 / 5 | Rules are right; App Check inert, no app lock, no account deletion. |
-| 10 | Platform polish | 2.5 / 5 | Light theme only, English only, unbounded queries. |
-| 11 | Retention mechanics | 0.5 / 5 | No reminders, no recap, no analytics instrumented. |
-| 12 | Monetization | 0.0 / 5 | Specified, not built. |
+**Directional read: every dimension the original doc scored below 3/5 for a
+missing *mechanic* (not a missing *polish item*) moved by a full point or
+more.** The three lowest scores in the original — correction (1.5),
+getting data in (1.0), retention (0.5) — are the three with the largest
+jumps, because they were the three the original doc's own recommended
+sequence named first.
 
-**Weighted read: ~2.4 / 5 — roughly half of an entry-level utility bar.**
+A precise before/after single-number comparison isn't reproducible: the
+original's "~2.4/5 weighted read" used per-dimension weights that aren't
+recorded anywhere, only the score column. An equal-weight average of the
+same 12 numbers moves from ~2.1 to ~3.3 — treat that as roughly indicative,
+and the per-dimension table above as the reliable comparison.
 
-The shape is unusual and worth naming: this is not an evenly half-finished app. A
-few pieces are *above* the benchmark class (multi-currency money handling,
-pace-adjusted variance, PDF statements), sitting next to holes that a mainstream
-app would treat as launch blockers (can't fix a typo, can't allocate income).
+## What closed, with the receipts
 
-## Where it beats the benchmark
+- **Nothing could be edited** → `ExpenseRepository.updateExpense`,
+  `IncomeRepository.updateIncomeEvent`/`deleteIncomeEvent`/`restoreIncomeEvent`,
+  `RecurringRepository.updateDetails`/`addRatePeriod`/`setEndDate` all now
+  exist, wired to real UI (tap-to-edit on every list row, swipe-to-delete
+  with Undo on expenses and income).
+- **Income was never allocated** → `features/allocations/` is a new
+  collection (`users/{uid}/allocations`), `Bucket.balanceMinor` and
+  `UserProfile.unallocatedMinor` are new running totals maintained inside
+  Firestore transactions at every write path that moves money (add expense,
+  delete/restore/edit expense, confirm a recurring occurrence, allocate).
+  The dashboard's unallocated banner and goal-progress percentage — removed
+  in the prior pass specifically because this didn't exist — are back and
+  reading real data.
+- **No out-of-app signal** → `flutter_local_notifications` + `timezone`
+  are new dependencies; a daily evening reminder is schedulable from
+  Settings and re-syncs on every cold start.
+- **Deleting a bucket corrupted the month** → `Bucket.archivedAt` came back;
+  `BucketRepository.hasReferences` blocks hard-delete once a bucket has any
+  expense/recurring/allocation pointing at it, forcing archive instead.
+  `PlanRepository.watchPlanVsActual` now sources from `watchAllBuckets()`
+  rather than `watchActiveBuckets()`, which is the actual line-level fix for
+  the reconciliation bug the last evaluation traced — confirmed by a new
+  test case in `plan_vs_actual_test.dart`.
+- **The recurring date-overflow bug** (a payment due the 31st drifting into
+  March) is fixed and directly unit-tested — the stepping logic was pulled
+  out of the Firestore repository into pure, testable functions.
+- **The unbounded `recentExpenses` query** now has a `.limit(20)`.
+- **App Check was inert** → activated in `main.dart` (debug providers under
+  `kDebugMode`, Play Integrity/App Attest otherwise). Enforcement itself is
+  a Console step, not code, and remains outstanding.
+- **No account deletion** → built, including the reauth flow Firebase Auth
+  requires for a session older than its "recent sign-in" window.
+- **No CSV import** → built, with duplicate-flagging (not exclusion) per
+  the original FR-14 language.
+- **Light-theme only** → dark mode, keeping the app's own brand hues rather
+  than a generic palette.
+- **`implementation-status.md` was stale** → rewritten; the previous
+  evaluation's staleness finding (FR-01/02/04/05, US-10 wrongly marked "Not
+  started") is fixed as of this pass.
 
-- **Money handling** (`core/utils/currency.dart`, `core/widgets/money_field.dart`).
-  Integer minor units with per-currency exponents — 0 for UGX/JPY, 3 for KWD — and
-  a cash-register entry widget where no keystroke can produce an unparseable
-  value. Most apps in this tier hardcode two decimals and quietly break outside
-  the US/EU. This is genuinely better than the class.
-- **Pace-adjusted variance** (`features/planning/application/plan_vs_actual.dart`).
-  A three-state ladder (on track / off pace / off plan) with a straight-line pace
-  tick, instead of the usual "you've used 85% of Groceries" alert that fires
-  identically on day 5 and day 28. The sign convention (`higherIsBetter`) so income
-  and spend share one type is the correct design. Well tested — 449 lines.
-- **Per-month plan snapshots** (`monthlyPlans/{YYYY-MM}`). Editing a bucket today
-  does not rewrite what you planned last March. Goodbudget and EveryDollar both
-  get this right; plenty of smaller apps do not.
-- **PDF statement export** (`features/reports/`) and the **gross-vs-take-home
-  earnings report** (`features/earnings/`). Both are above the entry-level bar —
-  the deduction-rate report in particular has no equivalent in the comparison set.
-- **Undo instead of confirm dialogs.** Soft deletes make Undo a field flip, so a
-  swipe acts immediately. Correct instinct.
+## Two more real bugs found, same way as last time
 
-## Blocking gaps (P0 — the app is not entry-level useful without these)
+Static reading plus this pass's actual `flutter analyze`/`flutter test` run
+(the prior evaluation's own verification note said neither had been run — a
+working toolchain is available in this environment and was used throughout)
+turned up two pre-existing, untested money bugs, now fixed:
+`parseMoney` misparsed grouped zero-decimal-currency input (`"1,200"` UGX
+read as `1`), and `currencyHasSymbol` rendered letter-abbreviation symbols
+(`USh`, `CHF`) with no space, contradicting the currency layer's own stated
+design intent. Both are covered by `test/money_test.dart`, which failed
+before the fix and passes now.
 
-### 1. Nothing can be edited
-`ExpenseRepository` exposes add / delete / restore and no update.
-`IncomeRepository` exposes **only** `watch` and `add` — a mistyped paycheque is
-permanent and unremovable. `RecurringRepository` has no update or delete either;
-`income_list_screen.dart` has no tap target, no dismissible, nothing.
+## What's still open (P1/P2, unchanged or newly visible)
 
-Every app in the comparison class lets you tap a transaction and change amount,
-category, date and note. This is the single largest deviation from the benchmark,
-and it is the kind that ends usage in week one: the first fat-fingered `12500`
-poisons the month's numbers with no recourse.
+- **No de-allocate.** Allocating is one-directional; "I over-allocated, put
+  it back" has no UI or repository method yet.
+- **Allocation caps against the global unallocated pool, not the specific
+  income event's own contribution** — a deliberate simplification (matches
+  YNAB/Goodbudget's fungible "ready to assign" model) but worth knowing:
+  opening the Allocate sheet from paycheque A can spend money that actually
+  arrived from paycheque B.
+- **CSV import is single-bucket-per-import** — no per-row category mapping,
+  no remembered column mapping across imports.
+- **No app lock / biometrics.** Still absent, still standard in the
+  finance category.
+- **English-only.** No `intl`/ARB/`l10n` — unchanged from the prior finding.
+- **`firebase_analytics` is still an unused dependency.** Activation and
+  retention still can't be measured even though the retention lever
+  (the reminder) now exists.
+- **Only one reminder type.** The evening log-your-day nudge exists; there's
+  still no bill-due alert or overspend push, both mentioned in the original
+  doc's "highest-leverage retention feature" framing.
+- **Freemium/trial/billing is entirely unbuilt** — explicitly out of scope
+  for this pass, same as the original evaluation found.
+- **Zero widget/integration test coverage remains.** This pass added 20 new
+  pure-Dart unit tests (136 total, up from 116) covering every new piece of
+  testable logic, but `test/widget_test.dart` is still the placeholder —
+  nothing asserts that any screen actually builds.
+- **Nothing here was verified against a live Firestore/Auth account.** No
+  emulator is configured in this repo and no test account is available in
+  this environment. The transactional balance math, notification scheduling,
+  and account-deletion flow are verified by static analysis and unit tests
+  only — see `implementation-status.md`'s verification section for the
+  specific manual click-through this still needs before shipping.
+- **The parallel Django/PostgreSQL implementation at the repo root**
+  (`ledger/`, `accounts/`, `recurring/`) is untouched by this pass and the
+  stack-choice conflict with `docs/adr-001-stack.md` is unresolved — still
+  worth a decision before more work lands on either side.
 
-**Needs:** `updateExpense`, full income CRUD, recurring edit/delete, and a tap
-target on every list row.
+## Recommended next sequence
 
-### 2. Income is never allocated — the stated premise is unimplemented
-The README describes FinTrack as "allocate incoming money into buckets". FR-08
-(allocation), FR-09 (unallocated funds) and carry-over balances are all absent, and
-the dashboard had to *remove* the unallocated banner and goal-progress percentage
-rather than show hardcoded zeros (see `implementation-status.md`).
-
-What ships is a **planned-spend-vs-actual-spend tracker**, not an envelope system.
-Concretely it means: buckets have no balance, money in and money out are two
-unconnected columns, goals show a target with no progress, and unspent Groceries
-money in July does not exist in August. Goodbudget's free tier — the closest
-comparable — is built entirely on the envelope balance and rollover this lacks.
-
-**Needs:** allocation of an income event across buckets, a derived bucket balance,
-month-end carry-over, and the unallocated-funds surface back on the dashboard.
-
-### 3. No out-of-app signal whatsoever
-`firebase_messaging` is a dependency. It is never imported outside `pubspec.yaml`.
-There is no evening reminder (Settings shows it disabled, "Coming soon"), no
-bill-due alert, no overspend alert, no weekly recap. Daily-logging apps live or die
-on the reminder — it is the highest-leverage retention feature in the category and
-it is 100% absent.
-
-`firebase_analytics` is likewise dead weight, which means activation and retention
-cannot currently be *measured* either.
-
-### 4. Deleting a bucket corrupts the month
-`BucketRepository.deleteBucket` hard-deletes the document. Expenses and recurring
-payments keep the dead `bucketId`. Consequences, all live today:
-
-- The dashboard renders those rows as "Unknown bucket".
-- `PlanVsActual` sums `actualSpendMinor` over *all* expenses but builds bucket lines
-  only for surviving buckets — so the per-bucket rows stop reconciling with the
-  month total, silently.
-- Confirming a recurring occurrence whose bucket was deleted writes a new expense
-  into a nonexistent bucket, indefinitely.
-
-Compare: the benchmark behaviour is either a soft archive, or delete-with-reassign
-("move 14 transactions to…"). Bucket deletion currently has a confirmation dialog
-but no data safety behind it.
-
-## Real defects found while reading
-
-| Where | Defect |
-|---|---|
-| `recurring_repository.dart` `_step` | `DateTime(from.year, from.month + 1, from.day)` overflows for short months: a payment due the 31st steps to 31 Feb → 3 March, and every subsequent occurrence inherits the drift. Rent and salary dates are exactly the ones that land on 29–31. |
-| `expense_repository.dart` `recentExpenses` | Unbounded `watchExpenses()` on a `keepAlive` provider, streaming the user's entire expense history to render five dashboard rows. No `.limit()`. Firestore read cost and memory grow linearly forever. |
-| `recurring_repository.dart` `_occurrenceDates` | Iterates from `payment.startOn` to the window end on every snapshot. A daily payment started three years ago is ~1,100 loop steps per payment per recomputation. |
-| `main.dart` | `firebase_app_check` is a dependency but `FirebaseAppCheck.instance.activate()` is never called — the declared protection on Firestore and Functions is not in force. |
-| `pubspec.yaml` | `firebase_messaging`, `firebase_analytics`, `firebase_remote_config` ship in the binary and are never initialized. |
-| `test/widget_test.dart` | Placeholder `expect(true, isTrue)`. All 1,176 lines of tests are pure-domain; there is zero widget or integration coverage — no test asserts that any screen builds. |
-| `docs/implementation-status.md` | Stale. FR-01, FR-02 and US-10 are marked "Not started" but sign-up, email verification and occurrence confirm/skip are all implemented and wired. |
-
-## Secondary gaps (P1)
-
-- **No dark mode.** `buildAppTheme()` is `Brightness.light` only and `MaterialApp`
-  sets no `darkTheme` — despite a `dark.html` mockup sitting in the repo root.
-  Table stakes for a 2026 consumer app.
-- **No CSV import.** Disabled row in Settings. Users arriving with a spreadsheet
-  cannot bring history in, which caps the app's first-session value at zero.
-- **No account deletion.** Required by both Play and App Store policy for accounts
-  created in-app, and by GDPR/erasure requests. `account_screen.dart` offers sign-out
-  only. This blocks store submission, not just parity.
-- **No app lock / biometrics.** Standard in the finance category; absent.
-- **No search or filter** on transactions — month picker only. Finding "that
-  restaurant charge" requires scrolling.
-- **English-only.** Every string is hardcoded; no `intl`, no ARB, no `l10n`. Ironic
-  given how carefully the currency layer handles 100+ countries — the app can format
-  UGX correctly and then only ever say "Add Expense" in English.
-- **No offline/sync-state UI.** Firestore's mobile persistence is on by default so
-  writes queue, but nothing tells the user that, and nothing distinguishes "saved"
-  from "saved locally, not yet synced".
-
-## Nice-to-have (P2)
-
-Trend charts (spend over time, category share over months — currently zero
-time-series visualization anywhere), home-screen quick-add widget, payee
-autocomplete from history, receipt capture (ADR-001 exists, unbuilt), shared/joint
-budgets, freemium gate and trial (FR-15/FR-16, specified only).
-
-## Recommended sequence to reach the bar
-
-1. **Editing everywhere** — `updateExpense`, income CRUD, recurring edit/delete.
-   Smallest change, largest correctness win, unblocks daily use.
-2. **Bucket delete safety** — soft archive or reassign-on-delete. Cheap, stops
-   active data corruption.
-3. **Allocation + carry-over (FR-08/09)** — makes the app the thing its README
-   claims, and unlocks goal progress and the unallocated banner already designed for.
-4. **Local notifications: evening reminder + bill due** — the retention lever.
-5. **Dark mode, App Check activation, account deletion** — three small, independent
-   items; the latter two are store/compliance blockers.
-6. **CSV import** — removes the cold-start wall.
-7. **Trends + search** — depth for retained users.
-
-Steps 1–4 are what move this from "impressive skeleton" to "an entry-level
-budgeting app someone would actually keep".
+1. **Manual verification pass** against a real Firebase project — the one
+   thing this pass genuinely could not do in this environment. Allocate →
+   spend → delete → restore, on a real account, watching `balanceMinor`/
+   `unallocatedMinor` the whole way.
+2. **De-allocate** — the natural next ask once allocation exists at all.
+3. **Wire `firebase_analytics`** now that there's a retention feature worth
+   measuring the effect of.
+4. **App lock / biometrics, then l10n** — the remaining P1 polish items.
+5. **Trial/freemium (FR-15/16)** — the only major PRD area with zero
+   implementation, deliberately last because monetizing before the product
+   loop is solid is the "classic error" the original PRD itself warned
+   against.
 
 ## Verification note
 
-`flutter analyze` and `flutter test` were **not** run — no Flutter SDK is available
-in this environment. Every finding above comes from reading `lib/`, `test/`,
-`firestore.rules` and `pubspec.yaml` directly. The defect table should be confirmed
-against a real toolchain before being worked.
+`flutter analyze` and `flutter test` **were** run this time (136 tests,
+0 failures) — the toolchain is available in this environment, unlike when
+the prior evaluation and the feature work before it were written. What
+was **not** run: anything requiring a live Firebase project (a real sign-in,
+a real Firestore write, an actual scheduled OS notification firing, an
+actual account deletion). Every claim about transactional correctness above
+is a claim about what the code says it will do, verified by reading and by
+unit-testing the pure logic underneath it — not a claim that it has been
+watched happen against production infrastructure.
