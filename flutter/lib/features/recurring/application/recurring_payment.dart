@@ -61,6 +61,21 @@ class Occurrence {
   final OccurrenceStatus status;
 }
 
+/// The stable id of the occurrence of [paymentId] due on [dueOn].
+///
+/// Occurrences are generated on the fly rather than stored, so this — not a
+/// document id — is what links a due date to the status doc and to the expense
+/// a confirmation writes. Pure and shared so that anything reasoning about
+/// occurrences (projections included) derives the same id the repository does.
+String occurrenceIdFor(String paymentId, DateTime dueOn) =>
+    '$paymentId::${dueOn.millisecondsSinceEpoch}';
+
+/// Inverse of [occurrenceIdFor].
+(String, DateTime) parseOccurrenceId(String occurrenceId) {
+  final parts = occurrenceId.split('::');
+  return (parts[0], DateTime.fromMillisecondsSinceEpoch(int.parse(parts[1])));
+}
+
 /// The rate in effect for [payment] on [date] — the most recent [RatePeriod]
 /// whose `effectiveFrom` is not after [date]. Pure so it's unit-testable
 /// without a Firestore document round-trip.

@@ -14,11 +14,11 @@ import 'package:fintrack/features/imports/presentation/import_screen.dart';
 import 'package:fintrack/features/income/presentation/income_list_screen.dart';
 import 'package:fintrack/features/onboarding/presentation/currency_setup_screen.dart';
 import 'package:fintrack/features/planning/presentation/plan_editor_screen.dart';
+import 'package:fintrack/features/planning/presentation/plan_screen.dart';
 import 'package:fintrack/features/planning/presentation/plan_vs_actual_screen.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
 import 'package:fintrack/features/profile/presentation/account_screen.dart';
 import 'package:fintrack/features/recurring/presentation/recurring_form_screen.dart';
-import 'package:fintrack/features/recurring/presentation/recurring_screen.dart';
 import 'package:fintrack/features/reports/presentation/export_screen.dart';
 import 'package:fintrack/features/settings/presentation/settings_screen.dart';
 import 'package:fintrack/features/trends/presentation/trends_screen.dart';
@@ -99,8 +99,10 @@ GoRouter router(Ref ref) {
         builder: (context, state) =>
             BucketDetailScreen(bucketId: state.pathParameters['id']!),
       ),
+      // `/plan` itself is a nav destination (below); the report it used to point
+      // at is now the history it links to.
       GoRoute(
-        path: '/plan',
+        path: '/plan/history',
         builder: (context, state) => const PlanVsActualScreen(),
       ),
       GoRoute(
@@ -121,7 +123,13 @@ GoRouter router(Ref ref) {
       ),
       GoRoute(
         path: '/transactions',
-        builder: (context, state) => const TransactionsScreen(),
+        // `?tab=recurring` opens the register straight on its recurring half —
+        // what the dashboard's upcoming card and the plan screen link to.
+        builder: (context, state) => TransactionsScreen(
+          initialTab: state.uri.queryParameters['tab'] == 'recurring'
+              ? TransactionsTab.recurring
+              : TransactionsTab.expenses,
+        ),
       ),
       GoRoute(
         path: '/import',
@@ -163,8 +171,8 @@ GoRouter router(Ref ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/recurring',
-                builder: (context, state) => const RecurringScreen(),
+                path: '/plan',
+                builder: (context, state) => const PlanScreen(),
               ),
             ],
           ),

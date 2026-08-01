@@ -7,22 +7,39 @@ import 'package:fintrack/features/expenses/presentation/add_expense_sheet.dart';
 import 'package:fintrack/features/expenses/presentation/expense_controller.dart';
 import 'package:fintrack/features/planning/application/monthly_plan.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
+import 'package:fintrack/features/recurring/presentation/recurring_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Every expense in a month, grouped by day, with swipe-to-delete.
+/// Which half of the record the screen opens on.
+enum TransactionsTab { expenses, recurring }
+
+/// The record of money out: what has already been spent, and what is set to
+/// repeat.
 ///
-/// Before this existed, expenses were only ever visible as the last five rows
-/// on the dashboard — so anything older than a few entries could not be
-/// reviewed, corrected or even seen.
+/// Recurring used to be its own bottom-nav destination, which split one
+/// question — "what has left my account and what is about to?" — across two
+/// places. Both are transactions; only their tense differs, so they are two
+/// tabs of one screen.
 class TransactionsScreen extends ConsumerStatefulWidget {
-  const TransactionsScreen({super.key});
+  const TransactionsScreen({
+    super.key,
+    this.initialTab = TransactionsTab.expenses,
+  });
+
+  final TransactionsTab initialTab;
 
   @override
   ConsumerState<TransactionsScreen> createState() => _TransactionsScreenState();
 }
 
-class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
+class _TransactionsScreenState extends ConsumerState<TransactionsScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController = TabController(
+    length: TransactionsTab.values.length,
+    initialIndex: widget.initialTab.index,
+    vsync: this,
+  );
   late DateTime _month = normaliseMonth(DateTime.now());
   final _searchController = TextEditingController();
   String? _filterBucketId;
@@ -31,6 +48,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -80,140 +98,159 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Transactions'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Expenses'),
+            Tab(text: 'Recurring'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildExpenses(context),
+          const RecurringView(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpenses(BuildContext context) {
     final expensesAsync = ref.watch(expensesForMonthProvider(_month));
     final bucketsAsync = ref.watch(activeBucketsProvider);
     final currency = ref.watch(currencyCodeProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Transactions')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: () => setState(
-                    () => _month = DateTime(_month.year, _month.month - 1),
-                  ),
-                  icon: const Icon(Icons.chevron_left),
-                  tooltip: 'Previous month',
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: () => setState(
+                  () => _month = DateTime(_month.year, _month.month - 1),
                 ),
-                Expanded(
-                  child: Text(
-                    formatMonth(_month),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                IconButton(
-                  onPressed: _canGoForward
-                      ? () => setState(
-                            () => _month =
-                                DateTime(_month.year, _month.month + 1),
-                          )
-                      : null,
-                  icon: const Icon(Icons.chevron_right),
-                  tooltip: 'Next month',
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search payee or note',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: _searchController.text.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () => setState(_searchController.clear),
-                      ),
-                isDense: true,
+                icon: const Icon(Icons.chevron_left),
+                tooltip: 'Previous month',
               ),
-              onChanged: (_) => setState(() {}),
-            ),
+              Expanded(
+                child: Text(
+                  formatMonth(_month),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              IconButton(
+                onPressed: _canGoForward
+                    ? () => setState(
+                          () => _month =
+                              DateTime(_month.year, _month.month + 1),
+                        )
+                    : null,
+                icon: const Icon(Icons.chevron_right),
+                tooltip: 'Next month',
+              ),
+            ],
           ),
-          bucketsAsync.when(
-            loading: () => const SizedBox.shrink(),
-            error: (_, _) => const SizedBox.shrink(),
-            data: (buckets) {
-              if (buckets.length < 2) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: SizedBox(
-                  height: 36,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    children: [
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search payee or note',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              suffixIcon: _searchController.text.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () => setState(_searchController.clear),
+                    ),
+              isDense: true,
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        bucketsAsync.when(
+          loading: () => const SizedBox.shrink(),
+          error: (_, _) => const SizedBox.shrink(),
+          data: (buckets) {
+            if (buckets.length < 2) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SizedBox(
+                height: 36,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: const Text('All'),
+                        selected: _filterBucketId == null,
+                        onSelected: (_) => setState(() => _filterBucketId = null),
+                      ),
+                    ),
+                    for (final bucket in buckets)
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: ChoiceChip(
-                          label: const Text('All'),
-                          selected: _filterBucketId == null,
-                          onSelected: (_) => setState(() => _filterBucketId = null),
+                          label: Text(bucket.name),
+                          selected: _filterBucketId == bucket.id,
+                          onSelected: (_) => setState(() => _filterBucketId = bucket.id),
                         ),
                       ),
-                      for (final bucket in buckets)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            label: Text(bucket.name),
-                            selected: _filterBucketId == bucket.id,
-                            onSelected: (_) => setState(() => _filterBucketId = bucket.id),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+        Expanded(
+          child: expensesAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text('Could not load transactions: $error'),
+              ),
+            ),
+            data: (allExpenses) {
+              final expenses = _applyFilters(allExpenses);
+              if (expenses.isEmpty) {
+                return allExpenses.isEmpty
+                    ? _EmptyMonth(month: _month)
+                    : Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Text(
+                            'Nothing matches that search or filter.',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
                           ),
                         ),
-                    ],
-                  ),
-                ),
+                      );
+              }
+              final names = {
+                for (final bucket in bucketsAsync.asData?.value ?? const <Bucket>[])
+                  bucket.id: bucket.name,
+              };
+              return _TransactionList(
+                expenses: expenses,
+                bucketNames: names,
+                currency: currency,
+                onDelete: _delete,
               );
             },
           ),
-          Expanded(
-            child: expensesAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text('Could not load transactions: $error'),
-                ),
-              ),
-              data: (allExpenses) {
-                final expenses = _applyFilters(allExpenses);
-                if (expenses.isEmpty) {
-                  return allExpenses.isEmpty
-                      ? _EmptyMonth(month: _month)
-                      : Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(32),
-                            child: Text(
-                              'Nothing matches that search or filter.',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
-                          ),
-                        );
-                }
-                final names = {
-                  for (final bucket in bucketsAsync.asData?.value ?? const <Bucket>[])
-                    bucket.id: bucket.name,
-                };
-                return _TransactionList(
-                  expenses: expenses,
-                  bucketNames: names,
-                  currency: currency,
-                  onDelete: _delete,
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
