@@ -2,370 +2,173 @@ import 'package:fintrack/core/utils/money.dart';
 import 'package:fintrack/features/expenses/data/expense_repository.dart';
 import 'package:fintrack/features/planning/application/month_projection.dart';
 import 'package:fintrack/features/planning/application/monthly_plan.dart';
+import 'package:fintrack/features/planning/application/plan_vs_actual.dart';
 import 'package:fintrack/features/planning/data/plan_repository.dart';
 import 'package:fintrack/features/planning/presentation/plan_controller.dart';
+import 'package:fintrack/features/planning/presentation/plan_editor_form.dart';
+import 'package:fintrack/features/planning/presentation/widgets/variance_row.dart';
 import 'package:fintrack/features/profile/data/profile_repository.dart';
 import 'package:fintrack/features/recurring/data/recurring_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-/// Where the month is heading, and everything that decides it.
+/// Budgeting: what you expect to earn this month, and what each bucket gets.
 ///
-/// The dashboard answers "am I OK today?" and the transactions list answers
-/// "what happened?". This is the forward-looking one: what the month lands on
-/// if nothing changes, and the three inputs — expected income, planned spend,
-/// recurring commitments — that move that number.
+/// The month then runs — income and expenses logged as they happen — and the
+/// same screen says how the plan is holding up underneath the fields that set
+/// it. Keeping both here is the point: the honest moment to change a budget is
+/// while you're looking at how the last version of it is going.
 class PlanScreen extends ConsumerWidget {
   const PlanScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final month = normaliseMonth(DateTime.now());
-    final reportAsync = ref.watch(planVsActualProvider(month));
-    final expensesAsync = ref.watch(expensesForMonthProvider(month));
-    final paymentsAsync = ref.watch(recurringPaymentsProvider);
-    final currency = ref.watch(currencyCodeProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text('Plan', style: Theme.of(context).textTheme.headlineMedium),
       ),
-      body: reportAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text('Could not load your plan: $error'),
-          ),
-        ),
-        data: (report) {
-          final expenses = expensesAsync.asData?.value;
-          final payments = paymentsAsync.asData?.value;
-          // Both feed the split between committed and everyday spend. Drawing
-          // the projection before they land would show a number that jumps the
-          // moment they arrive.
-          if (expenses == null || payments == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final projection = MonthProjection.from(
-            report: report,
-            expenses: expenses,
-            payments: payments,
-          );
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-            children: [
-              Text(
-                formatMonth(month),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              if (projection.isEmpty)
-                _NoPlanYet(onSetPlan: () => _openEditor(context, ref, month))
-              else
-                _ProjectionCard(projection: projection, currency: currency),
-              const SizedBox(height: 28),
-              Text(
-                'Configure',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'The projection is only ever as good as these three.',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              _ConfigCard(
-                children: [
-                  _ConfigRow(
-                    icon: Icons.edit_outlined,
-                    title: 'Expected income',
-                    subtitle: projection.expectedIncomeMinor > 0
-                        ? '${formatMoney(projection.expectedIncomeMinor, currency: currency)} expected this month'
-                        : 'Not set — the projection has nothing to land against',
-                    onTap: () => _openEditor(context, ref, month),
-                  ),
-                  _ConfigRow(
-                    icon: Icons.flag_outlined,
-                    title: 'Planned spend',
-                    subtitle: projection.plannedSpendMinor > 0
-                        ? '${formatMoney(projection.plannedSpendMinor, currency: currency)} planned across your buckets'
-                        : 'Not set — plan what each bucket should spend',
-                    onTap: () => _openEditor(context, ref, month),
-                  ),
-                  _ConfigRow(
-                    icon: Icons.event_repeat_outlined,
-                    title: 'Recurring commitments',
-                    subtitle: payments.isEmpty
-                        ? 'None yet — rent and subscriptions sharpen the forecast'
-                        : '${payments.length} ${payments.length == 1 ? 'payment' : 'payments'} · '
-                            '${formatMoney(projection.committedMinor, currency: currency)} still due this month',
-                    // Lives under transactions now; this is the way in from the
-                    // side that cares about it as a forecast input.
-                    onTap: () => context.push('/transactions?tab=recurring'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              _ConfigCard(
-                children: [
-                  _ConfigRow(
-                    icon: Icons.history,
-                    title: 'Plan vs actual',
-                    subtitle: 'How this month and past months landed',
-                    onTap: () {
-                      ref
-                          .read(selectedPlanMonthProvider.notifier)
-                          .select(DateTime.now());
-                      context.push('/plan/history');
-                    },
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  void _openEditor(BuildContext context, WidgetRef ref, DateTime month) {
-    // The editor works on whichever month the report is showing, so point it
-    // at this one before opening it.
-    ref.read(selectedPlanMonthProvider.notifier).select(month);
-    context.push('/plan/edit');
-  }
-}
-
-/// The headline: what the month ends with, and the arithmetic behind it.
-class _ProjectionCard extends StatelessWidget {
-  const _ProjectionCard({required this.projection, required this.currency});
-
-  final MonthProjection projection;
-  final String currency;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final leftover = projection.projectedLeftoverMinor;
-    final isShort = leftover < 0;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isShort ? 'Projected shortfall' : 'Projected to be left over',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        formatMoney(leftover.abs(), currency: currency),
-                        style: theme.textTheme.displaySmall?.copyWith(
-                          color: isShort ? colorScheme.error : null,
-                        ),
-                      ),
-                    ],
-                  ),
+      body: PlanEditorForm(
+        month: month,
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+        header: [
+          Text(
+            formatMonth(month),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-                const SizedBox(width: 12),
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    '${projection.daysRemaining} days left',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _Line(
-              label: 'Spent so far',
-              amountMinor: projection.spentMinor,
-              currency: currency,
-            ),
-            const SizedBox(height: 10),
-            _Line(
-              label: 'Recurring still due',
-              amountMinor: projection.committedMinor,
-              currency: currency,
-              // The exact half of the forecast: these are dated, known amounts,
-              // not an extrapolation.
-              note: 'known',
-            ),
-            const SizedBox(height: 10),
-            _Line(
-              label: 'Everyday spend to come',
-              amountMinor: projection.variableForecastMinor,
-              currency: currency,
-              note: projection.runRateIsMeaningful ? 'at this pace' : 'early estimate',
-            ),
-            const SizedBox(height: 14),
-            Divider(height: 1, color: colorScheme.outline.withValues(alpha: 0.15)),
-            const SizedBox(height: 14),
-            _Line(
-              label: 'Projected spend',
-              amountMinor: projection.projectedSpendMinor,
-              currency: currency,
-              emphasised: true,
-            ),
-            const SizedBox(height: 10),
-            _Line(
-              label: 'Money in expected',
-              amountMinor: projection.projectedIncomeMinor,
-              currency: currency,
-              emphasised: true,
-            ),
-            if (projection.plannedSpendMinor > 0) ...[
-              const SizedBox(height: 16),
-              _AgainstPlan(projection: projection, currency: currency),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AgainstPlan extends StatelessWidget {
-  const _AgainstPlan({required this.projection, required this.currency});
-
-  final MonthProjection projection;
-  final String currency;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final gap = projection.projectedVsPlanMinor;
-    final isOver = gap > 0;
-    final colour = isOver ? colorScheme.error : colorScheme.secondary;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: (isOver ? colorScheme.errorContainer : colorScheme.surfaceContainerHigh)
-            .withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(isOver ? Icons.info_outline : Icons.check_circle_outline,
-              size: 16, color: colour),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              isOver
-                  ? 'That lands ${formatMoney(gap, currency: currency)} over your '
-                      '${formatMoney(projection.plannedSpendMinor, currency: currency)} plan.'
-                  : 'That lands ${formatMoney(-gap, currency: currency)} under your '
-                      '${formatMoney(projection.plannedSpendMinor, currency: currency)} plan.',
-              style: theme.textTheme.labelMedium,
-            ),
           ),
+          const SizedBox(height: 16),
+        ],
+        footer: const [
+          SizedBox(height: 32),
+          _HowItIsGoing(),
         ],
       ),
     );
   }
 }
 
-class _Line extends StatelessWidget {
-  const _Line({
-    required this.label,
-    required this.amountMinor,
-    required this.currency,
-    this.note,
-    this.emphasised = false,
-  });
-
-  final String label;
-  final int amountMinor;
-  final String currency;
-  final String? note;
-  final bool emphasised;
+/// The other half of budgeting: whether the plan is being executed.
+///
+/// Deliberately below the fields rather than above them. The first job of this
+/// screen is to let the month be planned; the report is what you consult once
+/// there is a plan to report on.
+class _HowItIsGoing extends ConsumerWidget {
+  const _HowItIsGoing();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final labelStyle = emphasised
-        ? theme.textTheme.bodyMedium
-        : theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant);
+    final month = normaliseMonth(DateTime.now());
+    final reportAsync = ref.watch(planVsActualProvider(month));
+    final currency = ref.watch(currencyCodeProvider);
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Row(
-            children: [
-              Flexible(child: Text(label, style: labelStyle)),
-              if (note != null) ...[
-                const SizedBox(width: 6),
-                Text(
-                  note!,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ],
+        Text('How it is going', style: theme.textTheme.titleLarge),
+        const SizedBox(height: 4),
+        Text(
+          'Everything you log this month lands here.',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
-        const SizedBox(width: 8),
-        Text(
-          formatMoney(amountMinor, currency: currency),
-          style: emphasised ? theme.textTheme.titleMedium : theme.textTheme.bodyMedium,
+        const SizedBox(height: 12),
+        reportAsync.when(
+          loading: () => const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(),
+            ),
+          ),
+          error: (error, _) => Text('Could not load this month: $error'),
+          data: (report) => _ProgressCard(report: report, currency: currency),
         ),
+        const SizedBox(height: 12),
+        _RecurringCard(month: month, currency: currency),
       ],
     );
   }
 }
 
-class _NoPlanYet extends StatelessWidget {
-  const _NoPlanYet({required this.onSetPlan});
+class _ProgressCard extends ConsumerWidget {
+  const _ProgressCard({required this.report, required this.currency});
 
-  final VoidCallback onSetPlan;
+  final PlanVsActual report;
+  final String currency;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+
+    if (!report.hasPlan && !report.hasActuals) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'Nothing logged yet. Save a plan above, then log income and '
+            'expenses as the month goes — this fills in from there.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Nothing to project yet', style: theme.textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            Text(
-              'Set what you expect to earn and what each bucket should spend, '
-              'and this shows where the month lands before it gets there.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Day ${report.daysElapsed} of ${report.daysInMonth}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Text(
+                  report.leftToSpendMinor < 0
+                      ? '${formatMoney(-report.leftToSpendMinor, currency: currency)} over plan'
+                      : '${formatMoney(report.leftToSpendMinor, currency: currency)} left to spend',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: report.leftToSpendMinor < 0
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
-            FilledButton(onPressed: onSetPlan, child: const Text('Set your plan')),
+            VarianceRow(line: report.income, currency: currency),
+            const SizedBox(height: 18),
+            VarianceRow(line: report.spend, currency: currency),
+            const SizedBox(height: 12),
+            const _ProjectionNote(),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () {
+                  // The report's month picker is how earlier months — and the
+                  // plans they were judged against — are reached.
+                  ref
+                      .read(selectedPlanMonthProvider.notifier)
+                      .select(report.month);
+                  context.push('/plan/history');
+                },
+                child: const Text('Bucket by bucket, and past months'),
+              ),
+            ),
           ],
         ),
       ),
@@ -373,55 +176,112 @@ class _NoPlanYet extends StatelessWidget {
   }
 }
 
-class _ConfigCard extends StatelessWidget {
-  const _ConfigCard({required this.children});
-
-  final List<Widget> children;
+/// Where the month lands if nothing changes, split into what is already known
+/// and what is only a pace. Silent until both halves can be computed.
+class _ProjectionNote extends ConsumerWidget {
+  const _ProjectionNote();
 
   @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            children[i],
-            if (i != children.length - 1)
-              Divider(
-                height: 1,
-                indent: 56,
-                color: colorScheme.outline.withValues(alpha: 0.15),
-              ),
-          ],
-        ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final month = normaliseMonth(DateTime.now());
+    final report = ref.watch(planVsActualProvider(month)).asData?.value;
+    final expenses = ref.watch(expensesForMonthProvider(month)).asData?.value;
+    final payments = ref.watch(recurringPaymentsProvider).asData?.value;
+    final currency = ref.watch(currencyCodeProvider);
+
+    if (report == null || expenses == null || payments == null) {
+      return const SizedBox.shrink();
+    }
+
+    final projection = MonthProjection.from(
+      report: report,
+      expenses: expenses,
+      payments: payments,
+    );
+    if (projection.isEmpty || projection.projectedSpendMinor == 0) {
+      return const SizedBox.shrink();
+    }
+
+    final buffer = StringBuffer(
+      'On course to spend '
+      '${formatMoney(projection.projectedSpendMinor, currency: currency)}',
+    );
+    if (projection.committedMinor > 0) {
+      buffer.write(
+        ', including '
+        '${formatMoney(projection.committedMinor, currency: currency)} '
+        'of recurring still due',
+      );
+    }
+    if (projection.plannedSpendMinor > 0) {
+      final gap = projection.projectedVsPlanMinor;
+      buffer.write(
+        gap > 0
+            ? ' — ${formatMoney(gap, currency: currency)} over plan'
+            : ' — ${formatMoney(-gap, currency: currency)} under plan',
+      );
+    }
+    buffer.write('.');
+
+    return Text(
+      buffer.toString(),
+      style: theme.textTheme.labelMedium?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
       ),
     );
   }
 }
 
-class _ConfigRow extends StatelessWidget {
-  const _ConfigRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+/// Fixed obligations are the part of the budget that is decided before the
+/// month starts, so the budgeting screen is where the link to them belongs.
+class _RecurringCard extends ConsumerWidget {
+  const _RecurringCard({required this.month, required this.currency});
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+  final DateTime month;
+  final String currency;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return ListTile(
-      leading: Icon(icon, color: theme.colorScheme.onSurfaceVariant),
-      title: Text(title, style: theme.textTheme.bodyMedium),
-      subtitle: Text(subtitle),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: onTap,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final report = ref.watch(planVsActualProvider(month)).asData?.value;
+    final expenses = ref.watch(expensesForMonthProvider(month)).asData?.value;
+    final payments = ref.watch(recurringPaymentsProvider).asData?.value;
+
+    final String subtitle;
+    if (payments == null || payments.isEmpty) {
+      subtitle = 'None yet — rent and subscriptions belong in the budget';
+    } else if (report == null || expenses == null) {
+      subtitle = '${payments.length} '
+          '${payments.length == 1 ? 'payment' : 'payments'}';
+    } else {
+      final projection = MonthProjection.from(
+        report: report,
+        expenses: expenses,
+        payments: payments,
+      );
+      subtitle = '${payments.length} '
+          '${payments.length == 1 ? 'payment' : 'payments'} · '
+          '${formatMoney(projection.committedMinor, currency: currency)} '
+          'still due this month';
+    }
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        leading: Icon(
+          Icons.event_repeat_outlined,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+        title: Text(
+          'Recurring commitments',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+        // Lives under transactions now; this is the way in from the side that
+        // cares about it as a budget input.
+        onTap: () => context.push('/transactions?tab=recurring'),
+      ),
     );
   }
 }

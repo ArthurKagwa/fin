@@ -25,7 +25,7 @@ before/after scorecard.
 | FR-14 | CSV import with mapping + dedup | Done | `features/imports/` | Pick file → map columns → preview with duplicates flagged (not excluded) → commit; single bucket per import |
 | FR-15 | 3-month trial, then freemium gate | Not started | — | Specified only (`docs/01-prd.md` FR-16); no trial/plan fields exist on `UserProfile` |
 | FR-16 | Freemium limits (5 buckets, 3 recurring) | Not started | — | Same as above |
-| FR-17 | Planned vs actual income and spend | Done | `features/planning/` | Expected income sources + per-bucket planned spend, snapshotted per month |
+| FR-17 | Planned vs actual income and spend | Done | `features/planning/` | Budgeting lives on the Plan tab (expected income → distributed across buckets, snapshotted per month); the report is `/plan/history` |
 | FR-18 | Export a month as a PDF statement | Done | `features/reports/` | Summary, money in by source, spend by bucket, every transaction |
 | FR-19 | Transactions list with correction | Done | `features/expenses/presentation/transactions_screen.dart` | Two tabs (Expenses / Recurring); month picker, search (payee/note), bucket filter chips, swipe-delete with Undo, tap-to-edit |
 | US-01 | Signup: email + password, currency confirmation | Done | `features/auth/`, `features/onboarding/` | |
@@ -44,7 +44,7 @@ before/after scorecard.
 | US-21 | Paycheque deductions | Done | `features/income/` | |
 | US-22 | Deduction prefill from prior paycheque | Not started | — | |
 | US-23 | Earnings report (gross vs take-home) | Done | `features/earnings/` | |
-| US-24 | Set expected income for a month | Done | `features/planning/presentation/plan_editor_screen.dart` | |
+| US-24 | Set expected income for a month | Done | `features/planning/presentation/plan_editor_form.dart` | On the Plan tab for the current month; `/plan/edit` for an earlier one |
 | US-25 | Compare a past month against its own plan | Done | `features/planning/presentation/plan_vs_actual_screen.dart` | |
 | US-26 | Account details | Done | `features/profile/presentation/account_screen.dart` | Now includes account deletion (danger zone) |
 
@@ -182,11 +182,24 @@ The bottom nav is now **Home · Money In · Plan · More**.
   own. `/transactions?tab=recurring` deep-links to it, which is what the
   dashboard's upcoming-charges card and the plan screen now push.
   `/recurring/new` and `/recurring/:id/edit` are unchanged.
-- **`/plan` is the new destination** (`features/planning/presentation/plan_screen.dart`):
-  where the month is heading, plus the three inputs that move it — expected
-  income, planned spend (both → `/plan/edit`) and recurring commitments (→ the
-  recurring tab). The plan-vs-actual report it replaced moved to
-  `/plan/history`; the dashboard card and More → History point there.
+- **`/plan` is the budgeting destination**
+  (`features/planning/presentation/plan_screen.dart`): expected income sources
+  entered directly, then distributed across the buckets, with a live
+  **left to distribute** figure (expected income less everything already given
+  a job) between the two. Income and expenses are logged through the month as
+  before; underneath the fields, *How it is going* shows money-in and money-out
+  against the plan for the same month, a one-line projection, and the way
+  through to the bucket-by-bucket report.
+- The plan-vs-actual report that used to own `/plan` moved to `/plan/history`;
+  the dashboard card and More → History point there. Its FAB still opens
+  `/plan/edit` — now a thin scaffold around the same form, which is how an
+  *earlier* month's plan gets edited. The current month is budgeted on the tab.
+- The form behind both is `PlanEditorForm`
+  (`features/planning/presentation/plan_editor_form.dart`), hosted twice with
+  `header`/`footer` slots spliced into its scroll view, so the entry rules and
+  the distribution arithmetic exist once. Distributing more than you expect to
+  earn is allowed and said out loud on save — same rule as overspending a
+  bucket: warn, never block.
 
 ### The projection (`features/planning/application/month_projection.dart`)
 
@@ -211,7 +224,9 @@ occurrence still counts as committed until its due date passes — skip status
 lives in its own collection, not on the expense, so it isn't visible to a pure
 function. Over-forecasting a waved-off charge is the safer direction.
 
-Pure Dart, covered by `test/month_projection_test.dart` (15 cases).
+Pure Dart, covered by `test/month_projection_test.dart` (15 cases). It is
+reported as one sentence under *How it is going*, not as the headline — the
+headline of a budgeting screen is the budget.
 
 ## Verification
 
