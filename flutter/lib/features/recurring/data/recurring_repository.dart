@@ -93,7 +93,7 @@ class FirestoreRecurringRepository implements RecurringRepository {
         for (final doc in paymentsSnapshot.docs) {
           final payment = _paymentFromDoc(doc);
           for (final dueOn in occurrenceDates(payment, windowStart, windowEnd)) {
-            final id = _occurrenceId(payment.id, dueOn);
+            final id = occurrenceIdFor(payment.id, dueOn);
             if (resolvedIds.contains(id)) continue;
             occurrences.add(
               Occurrence(
@@ -142,7 +142,7 @@ class FirestoreRecurringRepository implements RecurringRepository {
 
   @override
   Future<void> confirmOccurrence(String occurrenceId) async {
-    final (paymentId, dueOn) = _parseOccurrenceId(occurrenceId);
+    final (paymentId, dueOn) = parseOccurrenceId(occurrenceId);
     final paymentDoc = await _payments.doc(paymentId).get();
     final payment = _paymentFromDoc(paymentDoc);
     final amountMinor = amountAt(payment, dueOn);
@@ -172,7 +172,7 @@ class FirestoreRecurringRepository implements RecurringRepository {
 
   @override
   Future<void> skipOccurrence(String occurrenceId) async {
-    final (paymentId, dueOn) = _parseOccurrenceId(occurrenceId);
+    final (paymentId, dueOn) = parseOccurrenceId(occurrenceId);
     await _occurrenceStatuses.doc(occurrenceId).set({
       'recurringPaymentId': paymentId,
       'dueOn': Timestamp.fromDate(dueOn),
@@ -220,14 +220,6 @@ class FirestoreRecurringRepository implements RecurringRepository {
 
   @override
   Future<void> deleteRecurringPayment(String id) => _payments.doc(id).delete();
-
-  String _occurrenceId(String paymentId, DateTime dueOn) =>
-      '$paymentId::${dueOn.millisecondsSinceEpoch}';
-
-  (String, DateTime) _parseOccurrenceId(String occurrenceId) {
-    final parts = occurrenceId.split('::');
-    return (parts[0], DateTime.fromMillisecondsSinceEpoch(int.parse(parts[1])));
-  }
 
   RecurringPayment _paymentFromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data()!;

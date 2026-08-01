@@ -21,13 +21,13 @@ before/after scorecard.
 | FR-10 | Recurring payment registry | Done | `features/recurring/` | Create/rename/rebucket on a full screen; "Custom" interval now selectable |
 | FR-11 | Amount-change history for recurring payments | Done | `features/recurring/presentation/recurring_form_screen.dart` (`_addRateChangeDialog`) | Appends a new `RatePeriod`; history preserved and already read by `currentAmountMinor`/`amountAt` |
 | FR-12 | Dashboard: bucket status + pace | Done | `features/planning/`, `features/dashboard/` | Pace-adjusted three-state ladder; unallocated banner and real goal-progress % restored |
-| FR-13 | Upcoming recurring charges | Done | `features/recurring/presentation/recurring_screen.dart` | Confirm/skip within a 14-day lookahead |
+| FR-13 | Upcoming recurring charges | Done | `features/recurring/presentation/recurring_view.dart` | Confirm/skip within a 14-day lookahead; lives as the Recurring tab of the transactions screen |
 | FR-14 | CSV import with mapping + dedup | Done | `features/imports/` | Pick file → map columns → preview with duplicates flagged (not excluded) → commit; single bucket per import |
 | FR-15 | 3-month trial, then freemium gate | Not started | — | Specified only (`docs/01-prd.md` FR-16); no trial/plan fields exist on `UserProfile` |
 | FR-16 | Freemium limits (5 buckets, 3 recurring) | Not started | — | Same as above |
 | FR-17 | Planned vs actual income and spend | Done | `features/planning/` | Expected income sources + per-bucket planned spend, snapshotted per month |
 | FR-18 | Export a month as a PDF statement | Done | `features/reports/` | Summary, money in by source, spend by bucket, every transaction |
-| FR-19 | Transactions list with correction | Done | `features/expenses/presentation/transactions_screen.dart` | Month picker, search (payee/note), bucket filter chips, swipe-delete with Undo, tap-to-edit |
+| FR-19 | Transactions list with correction | Done | `features/expenses/presentation/transactions_screen.dart` | Two tabs (Expenses / Recurring); month picker, search (payee/note), bucket filter chips, swipe-delete with Undo, tap-to-edit |
 | US-01 | Signup: email + password, currency confirmation | Done | `features/auth/`, `features/onboarding/` | |
 | US-04 | Log income (paycheque or one-off) | Done | `features/income/` | |
 | US-05 | Create and manage buckets | Done | `features/buckets/` | Create, list, edit, archive/unarchive, delete-when-safe |
@@ -35,7 +35,7 @@ before/after scorecard.
 | US-07 | Log daily expenses (fast path) | Done | `features/expenses/presentation/add_expense_sheet.dart` | |
 | US-08 | Overspend: warn, never block | Done | `features/dashboard/`, `features/planning/` | Bucket cards go red/amber but every write path still succeeds — overspending was never blocked at the repository layer |
 | US-09 | Add recurring payment + first rate period | Done | `features/recurring/presentation/recurring_form_screen.dart` | |
-| US-10 | Confirm / skip an occurrence | Done | `features/recurring/presentation/recurring_screen.dart`, `recurring_repository.dart` | Confirm writes an expense + status doc + bucket balance decrement in one batch |
+| US-10 | Confirm / skip an occurrence | Done | `features/recurring/presentation/recurring_view.dart`, `recurring_repository.dart` | Confirm writes an expense + status doc + bucket balance decrement in one batch |
 | US-11 | Record amount change (new rate period) | Done | `features/recurring/presentation/recurring_form_screen.dart` | |
 | US-13 | Dashboard with pace framing | Done | `features/planning/` | |
 | US-17 | Trial management + free-tier gating | Not started | — | |
@@ -169,6 +169,50 @@ short month's last day — the stepping logic was pulled out into pure,
 directly-testable functions (`stepOccurrence`/`occurrenceDates`/`amountAt`)
 as part of the fix.
 
+## Navigation: Recurring moved into Transactions, Plan took its tab
+
+The bottom nav is now **Home · Money In · Plan · More**.
+
+- **Recurring is a tab of the transactions screen**
+  (`TransactionsScreen(initialTab:)`, `TransactionsTab.expenses|recurring`).
+  It was a record of money out sitting next to another record of money out;
+  splitting "what left my account" from "what is about to" across two
+  destinations meant neither answered the question on its own.
+  `RecurringScreen` became `RecurringView` — same content, no scaffold of its
+  own. `/transactions?tab=recurring` deep-links to it, which is what the
+  dashboard's upcoming-charges card and the plan screen now push.
+  `/recurring/new` and `/recurring/:id/edit` are unchanged.
+- **`/plan` is the new destination** (`features/planning/presentation/plan_screen.dart`):
+  where the month is heading, plus the three inputs that move it — expected
+  income, planned spend (both → `/plan/edit`) and recurring commitments (→ the
+  recurring tab). The plan-vs-actual report it replaced moved to
+  `/plan/history`; the dashboard card and More → History point there.
+
+### The projection (`features/planning/application/month_projection.dart`)
+
+`PlanVsActual.projectedSpendMinor` draws one straight line through everything
+spent so far, which is wrong in the case that matters most: rent lands on the
+1st, so on the 3rd it forecasts a month of rent every three days.
+`MonthProjection` splits the month into what is known and what has to be
+guessed:
+
+```
+projected spend = spent so far
+                + recurring charges still due before month end   (dated, exact)
+                + everyday spend continuing at its own pace      (extrapolated)
+```
+
+Recurring actuals are identified by `Expense.occurrenceId`, so a confirmed
+charge is counted once — as spend, never again as a commitment — and never
+inflates the run rate. `occurrenceIdFor`/`parseOccurrenceId` moved out of
+`FirestoreRecurringRepository` into `recurring_payment.dart` so the projection
+derives the same occurrence ids the repository writes. Known gap: a *skipped*
+occurrence still counts as committed until its due date passes — skip status
+lives in its own collection, not on the expense, so it isn't visible to a pure
+function. Over-forecasting a waved-off charge is the safer direction.
+
+Pure Dart, covered by `test/month_projection_test.dart` (15 cases).
+
 ## Verification
 
 `flutter analyze` clean and `flutter test` green (136 tests, up from 116
@@ -177,6 +221,13 @@ before this pass — 20 new: `recurring_payment_test.dart`,
 `plan_vs_actual_test.dart` for the archived-bucket reconciliation fix).
 `dart run build_runner build` regenerated for every new/changed `@riverpod`
 provider.
+
+**The nav/projection change above was not run.** No Flutter or Dart SDK is
+installed in the environment it was written in, so neither `flutter analyze`
+nor `flutter test` was executed against it — including
+`month_projection_test.dart`. It deliberately adds no `@riverpod` provider
+(the projection is assembled in `PlanScreen` from providers that already
+exist), so no code generation is outstanding. Run both before merging.
 
 **Not verified**: no Firestore emulator is configured in this repo and there
 is no test Firebase account available in this environment, so none of the

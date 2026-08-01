@@ -33,7 +33,7 @@ class SettingsScreen extends ConsumerWidget {
               _SettingsRow(
                 icon: Icons.receipt_long_outlined,
                 title: 'Transactions',
-                subtitle: 'Every expense, by month',
+                subtitle: 'Every expense by month, plus recurring',
                 onTap: () => context.push('/transactions'),
               ),
               _SettingsRow(
@@ -54,7 +54,7 @@ class SettingsScreen extends ConsumerWidget {
                   ref
                       .read(selectedPlanMonthProvider.notifier)
                       .select(DateTime.now());
-                  context.push('/plan');
+                  context.push('/plan/history');
                 },
               ),
               _SettingsRow(

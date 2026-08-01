@@ -7,8 +7,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class RecurringScreen extends ConsumerWidget {
-  const RecurringScreen({super.key});
+/// The recurring register: what is due next, and every payment behind it.
+///
+/// Body only, no scaffold of its own — recurring is a view of the same money
+/// the transactions list shows, so it lives as a tab inside
+/// `TransactionsScreen` rather than as a destination of its own.
+class RecurringView extends ConsumerWidget {
+  const RecurringView({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -16,89 +21,88 @@ class RecurringScreen extends ConsumerWidget {
     final occurrencesAsync = ref.watch(upcomingOccurrencesProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Recurring', style: Theme.of(context).textTheme.headlineMedium),
+    return paymentsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('Could not load recurring payments: $error'),
+        ),
       ),
-      body: paymentsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Could not load recurring payments: $error')),
-        data: (payments) {
-          final paymentsById = {for (final p in payments) p.id: p};
+      data: (payments) {
+        final paymentsById = {for (final p in payments) p.id: p};
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Upcoming', style: Theme.of(context).textTheme.titleLarge),
-                  Text(
-                    'Next 14 days',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              occurrencesAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => Text('Could not load upcoming charges: $error'),
-                data: (occurrences) {
-                  if (occurrences.isEmpty) {
-                    return Text(
-                      'No upcoming charges — add recurring payments.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                    );
-                  }
-                  return Column(
-                    children: [
-                      for (final occurrence in occurrences)
-                        if (paymentsById[occurrence.recurringPaymentId] != null)
-                          _OccurrenceRow(
-                            occurrence: occurrence,
-                            payment: paymentsById[occurrence.recurringPaymentId]!,
-                          ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 28),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('All recurring', style: Theme.of(context).textTheme.titleLarge),
-                  TextButton.icon(
-                    onPressed: () => context.push('/recurring/new'),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (payments.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Text(
-                    'No recurring payments yet — add rent, subscriptions or '
-                    'school fees and they show up here before they land.',
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Upcoming', style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  'Next 14 days',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            occurrencesAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => Text('Could not load upcoming charges: $error'),
+              data: (occurrences) {
+                if (occurrences.isEmpty) {
+                  return Text(
+                    'No upcoming charges — add recurring payments.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
-                  ),
-                )
-              else
-                for (final payment in payments) _RecurringRow(payment: payment),
-            ],
-          );
-        },
-      ),
+                  );
+                }
+                return Column(
+                  children: [
+                    for (final occurrence in occurrences)
+                      if (paymentsById[occurrence.recurringPaymentId] != null)
+                        _OccurrenceRow(
+                          occurrence: occurrence,
+                          payment: paymentsById[occurrence.recurringPaymentId]!,
+                        ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 28),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('All recurring', style: Theme.of(context).textTheme.titleLarge),
+                TextButton.icon(
+                  onPressed: () => context.push('/recurring/new'),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (payments.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  'No recurring payments yet — add rent, subscriptions or '
+                  'school fees and they show up here before they land.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              )
+            else
+              for (final payment in payments) _RecurringRow(payment: payment),
+          ],
+        );
+      },
     );
   }
-
 }
 
 

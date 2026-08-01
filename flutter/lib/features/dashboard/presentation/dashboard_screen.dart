@@ -241,7 +241,7 @@ class _PlanVsActualCard extends ConsumerWidget {
       child: InkWell(
         onTap: () {
           ref.read(selectedPlanMonthProvider.notifier).select(report.month);
-          context.push('/plan');
+          context.push('/plan/history');
         },
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -406,7 +406,7 @@ class _UpcomingCard extends ConsumerWidget {
       // The chevron was here before the tap was. An affordance that does
       // nothing reads as a broken app, not as a decoration.
       child: InkWell(
-        onTap: () => context.go('/recurring'),
+        onTap: () => context.push('/transactions?tab=recurring'),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(

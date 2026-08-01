@@ -17,10 +17,13 @@ class ScaffoldWithNav extends StatelessWidget {
       icon: Icons.account_balance_wallet_outlined,
       activeIcon: Icons.account_balance_wallet,
     ),
+    // Recurring used to sit here. It is a record of money out, so it moved into
+    // Transactions; the destination this app was missing was the forward-looking
+    // one — where the month is headed and what you can change about it.
     _NavTab(
-      label: 'Recurring',
-      icon: Icons.repeat_outlined,
-      activeIcon: Icons.repeat,
+      label: 'Plan',
+      icon: Icons.flag_outlined,
+      activeIcon: Icons.flag,
     ),
     _NavTab(label: 'More', icon: Icons.menu_outlined, activeIcon: Icons.menu),
   ];
